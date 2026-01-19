@@ -26,6 +26,10 @@
         <div id="simulation-container">
             <div id="header-with-controls">
                 <h2>Simulation</h2>
+                <div id="manual-roll-toggle">
+                    <label for="manualRollSwitch">Manual Rolls:</label>
+                    <input type="checkbox" id="manualRollSwitch">
+                </div>
             </div>
             <div id="top-controls">
             </div>
@@ -102,33 +106,26 @@
                         <div id="bases-display">
                             <div class="base-row">
                                 <div class="base-container">
-                                    <div class="base-label">1B</div>
-                                    <div class="base-runner" id="runner-1b">-</div>
+                                    <div class="base-label">3B</div>
+                                    <div class="base-runner" id="runner-3b">-</div>
                                 </div>
                                 <div class="base-container">
                                     <div class="base-label">2B</div>
                                     <div class="base-runner" id="runner-2b">-</div>
                                 </div>
                                 <div class="base-container">
-                                    <div class="base-label">3B</div>
-                                    <div class="base-runner" id="runner-3b">-</div>
+                                    <div class="base-label">1B</div>
+                                    <div class="base-runner" id="runner-1b">-</div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div id="bottom-row">
-                        <div id="tabs-box">
-                            <h4 id="tabs-title">Result Info</h4>
-                            <div id="tabs-header"></div>
-                            <div id="tabs-content"></div>
-                            <div id="timeline-buttons">
-                                <button id="startButton" class="timeline-btn">Pitcher Delivery</button>
-                                <button id="batterResponseButton" class="timeline-btn" disabled>Batter Response</button>
-                                <button id="determineFielderButton" class="timeline-btn" disabled>Fielder Determination</button>
-                                <button id="handleCheckButton" class="timeline-btn" disabled>Handle Check</button>
-                            </div>
-                        </div>
+                    <div id="timeline-buttons">
+                        <button id="startButton" class="timeline-btn">Pitcher Delivery</button>
+                        <button id="batterResponseButton" class="timeline-btn" disabled>Batter Response</button>
+                        <button id="determineFielderButton" class="timeline-btn" disabled>Fielder Determination</button>
+                        <button id="handleCheckButton" class="timeline-btn" disabled>Handle Check</button>
                     </div>
                 </div>
             </div>
@@ -145,6 +142,12 @@
             </select>
             <select id="batterSelect" placeholder="Select Batter" style="width: 100%; margin-bottom: 12px;"></select>
             <div id="right-roster-list" class="roster-list"></div>
+        </div>
+        
+        <div id="tabs-box">
+            <h4 id="tabs-title">Result Info</h4>
+            <div id="tabs-header"></div>
+            <div id="tabs-content"></div>
         </div>
     </div>
 </body>

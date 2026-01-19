@@ -15,6 +15,30 @@
 	let runners = { '1b': null, '2b': null, '3b': null }; // Track runners on bases
 	let teamScores = { pitching: 0, batting: 0 }; // Track runs scored per team
 	let highlightedFielder = null; // Track which fielder is highlighted
+	let useManualRolls = false; // Toggle for manual dice rolls
+	let lastManualRoll = null; // Store last manual roll input
+
+	function getRandomRoll(sides) {
+		if (useManualRolls) {
+			return getManualRoll(sides);
+		}
+		return Math.floor(Math.random() * sides) + 1;
+	}
+
+	function getManualRoll(sides) {
+		let roll;
+		while (true) {
+			const input = prompt(`Enter a D${sides} roll (1-${sides}):`);
+			if (input === null) return Math.floor(Math.random() * sides) + 1; // Cancel - use auto roll
+			
+			roll = parseInt(input);
+			if (!isNaN(roll) && roll >= 1 && roll <= sides) {
+				lastManualRoll = roll;
+				return roll;
+			}
+			alert(`Invalid input. Please enter a number between 1 and ${sides}.`);
+		}
+	}
 
 	function createTab(tabId, tabLabel, content, isHTML = false) {
 		// Create tab button
@@ -78,17 +102,37 @@
 	}
 
 	function updateBasesDisplay() {
-		// Update the bases display with runner names
+		// Update the bases display with runner names and team colors
 		const bases = ['1b', '2b', '3b'];
+		const teamColorMap = {
+			0: 'team-rat-stack',        // Rat Stack - Purple
+			1: 'team-content-kings',    // Content Kings - Blue
+			2: 'team-nine-lives',       // Nine-Lives Nine - Yellow
+			3: 'team-straw-hats'        // Straw Hat Pirates - Red
+		};
+		
 		bases.forEach(base => {
 			const element = document.getElementById(`runner-${base}`);
 			if (element) {
+				// Remove all team color classes first
+				element.classList.remove('team-rat-stack', 'team-content-kings', 'team-nine-lives', 'team-straw-hats', 'occupied');
+				
 				if (runners[base]) {
 					element.textContent = runners[base];
 					element.classList.add('occupied');
+					
+					// Find the runner's team and apply team color
+					const battingTeam = teamsData[battingTeamIndex];
+					const runner = battingTeam.players.find(p => p.name === runners[base]);
+					if (runner) {
+						// Runners are from the batting team, so use batting team's color
+						const teamColorClass = teamColorMap[battingTeamIndex];
+						if (teamColorClass) {
+							element.classList.add(teamColorClass);
+						}
+					}
 				} else {
 					element.textContent = '-';
-					element.classList.remove('occupied');
 				}
 			}
 		});
@@ -149,6 +193,11 @@
 		pitchingTeamIndex = battingTeamIndex;
 		battingTeamIndex = tempIndex;
 		
+		// Swap the scores as well - pitching team's new score becomes old batting score
+		const tempScore = teamScores.pitching;
+		teamScores.pitching = teamScores.batting;
+		teamScores.batting = tempScore;
+		
 		// Update team selection dropdowns to reflect the swap
 		document.getElementById('pitchingTeamSelect').value = pitchingTeamIndex;
 		document.getElementById('battingTeamSelect').value = battingTeamIndex;
@@ -196,6 +245,9 @@
 		// Find their index in the roster
 		const fielderIndex = team.players.indexOf(fielder);
 		if (fielderIndex === -1) return;
+		
+		// Store the highlighted fielder info
+		highlightedFielder = { index: fielderIndex, color: color };
 		
 		// Highlight their player box in the left roster with specified color
 		const rosterItems = document.querySelectorAll('#left-roster-list .roster-item');
@@ -319,32 +371,95 @@
 
 	function setCurrentPitcher(playerIndex) {
 		currentPitcherIndex = parseInt(playerIndex);
+		populateRostersForTeams();
 		updateRosterHighlight();
 		updateZoneDisplay();
 	}
 
 	function setCurrentBatter(playerIndex) {
 		currentBatterIndex = parseInt(playerIndex);
+		populateRostersForTeams();
 		updateRosterHighlight();
 		updateZoneDisplay();
+	}
+
+	function getTeamColorClass(teamIndex) {
+		const colorMap = {
+			0: 'team-rat-stack',        // Rat Stack - Purple
+			1: 'team-content-kings',    // Content Kings - Blue
+			2: 'team-nine-lives',       // Nine-Lives Nine - Yellow
+			3: 'team-straw-hats'        // Straw Hat Pirates - Red
+		};
+		return colorMap[teamIndex] || '';
+	}
+
+	function getBaserunnerColorClass(playerName) {
+		// Find which team this player belongs to
+		for (let i = 0; i < teamsData.length; i++) {
+			const team = teamsData[i];
+			if (team.players.some(p => p.name === playerName)) {
+				const colorMap = {
+					0: 'baserunner-rat-stack',
+					1: 'baserunner-content-kings',
+					2: 'baserunner-nine-lives',
+					3: 'baserunner-straw-hats'
+				};
+				return colorMap[i] || '';
+			}
+		}
+		return '';
 	}
 
 	function populateRostersForTeams() {
 		const leftRoster = document.getElementById('left-roster-list');
 		const rightRoster = document.getElementById('right-roster-list');
+		const leftRosterPanel = document.getElementById('left-roster');
+		const rightRosterPanel = document.getElementById('right-roster');
 		
 		leftRoster.innerHTML = '';
 		rightRoster.innerHTML = '';
 		
+		// Remove all team color classes from roster panels
+		leftRosterPanel.className = 'roster-panel';
+		rightRosterPanel.className = 'roster-panel';
+		
 		// Populate left roster (pitching team)
 		if (pitchingTeamIndex !== '') {
 			const pitchingTeam = teamsData[pitchingTeamIndex];
+			const teamColor = getTeamColorClass(pitchingTeamIndex);
+			leftRosterPanel.classList.add(teamColor);
+			
 			pitchingTeam.players.forEach((player, index) => {
 				const rosterItem = document.createElement('div');
 				rosterItem.className = 'roster-item';
+				let roleLabel = '';
+				let isBaserunner = false;
+				if (index === currentPitcherIndex) {
+					roleLabel = '<span class="roster-role">Role: Pitching</span>';
+				} else if (highlightedFielder && highlightedFielder.index === index) {
+					roleLabel = '<span class="roster-role">Role: Fielding</span>';
+				} else {
+					// Check if this player is a runner on base
+					let baseStatus = '';
+					if (runners['1b'] === player.name) baseStatus = ' (1B)';
+					else if (runners['2b'] === player.name) baseStatus = ' (2B)';
+					else if (runners['3b'] === player.name) baseStatus = ' (3B)';
+					
+					if (baseStatus) {
+						roleLabel = '<span class="roster-role">Role: Baserunning' + baseStatus + '</span>';
+						isBaserunner = true;
+						const baserunnerColorClass = getBaserunnerColorClass(player.name);
+						if (baserunnerColorClass) {
+							rosterItem.classList.add(baserunnerColorClass);
+						}
+					}
+				}
 				rosterItem.innerHTML = `
-					<span class="roster-item-name">${player.name}</span>
-					<span class="roster-item-position">${player.position}</span>
+					<div class="roster-item-content">
+						<span class="roster-item-name">${player.name}</span>
+						<span class="roster-item-position">${player.position}</span>
+					</div>
+					${roleLabel}
 				`;
 				leftRoster.appendChild(rosterItem);
 			});
@@ -353,18 +468,52 @@
 		// Populate right roster (batting team)
 		if (battingTeamIndex !== '') {
 			const battingTeam = teamsData[battingTeamIndex];
+			const teamColor = getTeamColorClass(battingTeamIndex);
+			rightRosterPanel.classList.add(teamColor);
+			
 			battingTeam.players.forEach((player, index) => {
 				const rosterItem = document.createElement('div');
 				rosterItem.className = 'roster-item';
+				let roleLabel = '';
+				if (index === currentBatterIndex) {
+					roleLabel = '<span class="roster-role">Role: Batting</span>';
+				} else {
+					// Check if this player is a runner on base
+					let baseStatus = '';
+					if (runners['1b'] === player.name) baseStatus = ' (1B)';
+					else if (runners['2b'] === player.name) baseStatus = ' (2B)';
+					else if (runners['3b'] === player.name) baseStatus = ' (3B)';
+					
+					if (baseStatus) {
+						roleLabel = '<span class="roster-role">Role: Baserunning' + baseStatus + '</span>';
+						const baserunnerColorClass = getBaserunnerColorClass(player.name);
+						if (baserunnerColorClass) {
+							rosterItem.classList.add(baserunnerColorClass);
+						}
+					}
+				}
 				rosterItem.innerHTML = `
-					<span class="roster-item-name">${player.name}</span>
-					<span class="roster-item-position">${player.position}</span>
+					<div class="roster-item-content">
+						<span class="roster-item-name">${player.name}</span>
+						<span class="roster-item-position">${player.position}</span>
+					</div>
+					${roleLabel}
 				`;
 				rightRoster.appendChild(rosterItem);
 			});
 		}
 		
 		updateRosterHighlight();
+		
+		// Restore fielder highlighting if one was previously highlighted
+		if (highlightedFielder) {
+			const rosterItems = document.querySelectorAll('#left-roster-list .roster-item');
+			rosterItems.forEach((item, index) => {
+				if (index === highlightedFielder.index) {
+					item.classList.add(`fielding-highlight-${highlightedFielder.color}`);
+				}
+			});
+		}
 	}
 
 	function updatePitcherSelect() {
@@ -424,6 +573,12 @@
 		const team = teamsData[battingTeamIndex];
 		if (!team || !team.players) return;
 		
+		// Check if we have 3 outs
+		if (outs >= 3) {
+			advanceToNextHalfInning();
+			return;
+		}
+		
 		// Reset highlighted fielder
 		highlightedFielder = null;
 		
@@ -442,6 +597,15 @@
 			document.getElementById('batterSelect').value = nextBatterIndex;
 			setCurrentBatter(nextBatterIndex);
 			clearResults();
+		}
+	}
+
+	function updateNextBatterButton() {
+		const button = document.getElementById('nextBatterButton');
+		if (outs >= 3) {
+			button.textContent = 'Next Inning';
+		} else {
+			button.textContent = 'Next Batter';
 		}
 	}
 
@@ -516,6 +680,7 @@
 		brOutcome = '';
 		// Reset bases display for new at-bat
 		updateBasesDisplay();
+		updateNextBatterButton();
 	}
 
 	function addRunnerToBase(baseName) {
@@ -727,15 +892,23 @@
 		const scoreNeeded = handleScoreNeeded[brOutcome] || 0;
 		const handled = handleScore >= scoreNeeded;
 		
+		// Check if this is a catchable ball (automatic out)
+		const catchableBalls = ['Can of Corn', 'Bloop', 'Laser'];
+		const isCatchable = catchableBalls.includes(brOutcome);
+		
 		let result;
 		if (handled) {
 			result = 'Handled';
 			// Increment outs for successful fielding
 			outs++;
 			updateOutsDisplay();
-			// Check if 3 outs reached
-			if (outs >= 3) {
-				advanceToNextHalfInning();
+			updateNextBatterButton();
+			
+			// Update outcome display above zone for caught balls
+			if (isCatchable) {
+				document.getElementById('outcome-line1').textContent = 'BATTER OUT - CAUGHT';
+				document.getElementById('outcome-line2').textContent = '';
+				document.getElementById('outcome-line3').textContent = 'OUT';
 			}
 		} else {
 			result = 'Not Handled - Single, Runners advance 1 base';
@@ -751,8 +924,11 @@
 		
 		// Create tab content
 		const tabContent = `${createTableHeader()}${createTableRow(roll, 'Handle Check Die (D6)')}${createTableRow(fielderData.glove, "Fielder's Glove Stat")}${createTableRow(handleScore, 'Total Handle Score', true)}${createTableRow(scoreNeeded, 'Score Needed')}${createTableRow(result, 'Result', true)}${closeTable()}`;
-		createTab('handle', 'HC', tabContent, true);		// Disable the handle check button after it's been clicked
-		document.getElementById('handleCheckButton').disabled = true;	}
+		createTab('handle', 'HC', tabContent, true);
+		
+		// Disable the handle check button after it's been clicked
+		document.getElementById('handleCheckButton').disabled = true;
+	}
 
 	function startBatterResponse() {
 		const batter = teamsData[battingTeamIndex].players[currentBatterIndex];
@@ -773,10 +949,7 @@
 			// Increment outs
 			outs++;
 			updateOutsDisplay();
-			// Check if 3 outs reached
-			if (outs >= 3) {
-				advanceToNextHalfInning();
-			}
+			updateNextBatterButton();
 			
 			// Disable the batter response button after it's been clicked
 			document.getElementById('batterResponseButton').disabled = true;
@@ -836,10 +1009,7 @@
 			// Increment outs for strikeout
 			outs++;
 			updateOutsDisplay();
-			// Check if 3 outs reached
-			if (outs >= 3) {
-				advanceToNextHalfInning();
-			}
+			updateNextBatterButton();
 		} else if (total >= 4 && total <= 11) {
 			brPlayType = 'IN-PLAY';
 		}
@@ -996,7 +1166,7 @@
 			outcomeAbbr = 'SO LOOK';
 			posX = 0;
 			posY = -60; // High and outside
-			line1 = 'Strikeout Swinging';
+			line1 = 'Strikeout Looking';
 			line2 = '';
 		}
 		
@@ -1053,6 +1223,14 @@
 		if (total >= 5 && total <= 19) {
 			document.getElementById('batterResponseButton').disabled = false;
 		} else {
+			document.getElementById('batterResponseButton').disabled = true;
+		}
+		
+		// Handle Strikeout Looking - increment outs
+		if (outcome === 'Strikeout Looking') {
+			outs++;
+			updateOutsDisplay();
+			updateNextBatterButton();
 			document.getElementById('batterResponseButton').disabled = true;
 		}
 		
@@ -1143,6 +1321,9 @@
 		document.getElementById('determineFielderButton').addEventListener('click', determineFielder);
 		document.getElementById('handleCheckButton').addEventListener('click', handleCheck);
 		document.getElementById('nextBatterButton').addEventListener('click', nextBatter);
+		document.getElementById('manualRollSwitch').addEventListener('change', function() {
+			useManualRolls = this.checked;
+		});
 
 		// Expose functions globally for onclick handlers in HTML
 		window.setCurrentPitcherGlobal = setCurrentPitcher;

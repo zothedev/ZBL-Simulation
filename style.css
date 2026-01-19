@@ -28,6 +28,32 @@ body {
   padding: 24px;
 }
 
+#header-with-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+#manual-roll-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#manual-roll-toggle label {
+  font-size: 0.9em;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+
+#manual-roll-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
 .roster-panel {
   flex: 0 0 250px;
   background: white;
@@ -60,12 +86,29 @@ body {
   font-size: 0.9em;
   cursor: pointer;
   transition: all 0.2s ease;
-  display: block;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .roster-item:hover {
   background: #e3f2fd;
   border-left-color: #1976D2;
+}
+
+.roster-item-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.roster-role {
+  font-size: 0.8em;
+  color: white;
+  font-weight: 600;
+  white-space: nowrap;
+  margin-left: 8px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .roster-item.selected {
@@ -75,25 +118,64 @@ body {
   font-weight: 600;
 }
 
-.roster-item.fielding-highlight-yellow {
-  background: #FFC107;
+/* Team-specific selected highlight colors */
+.team-rat-stack .roster-item.selected {
+  background: #9C27B0;
+  border-left-color: #6a1b9a;
+}
+
+.team-content-kings .roster-item.selected {
+  background: #2196F3;
+  border-left-color: #0d47a1;
+}
+
+.team-straw-hats .roster-item.selected {
+  background: #e65100;
+  border-left-color: #bf360c;
+}
+
+.team-nine-lives .roster-item.selected {
+  background: #FBC02D;
   color: #333;
-  border-left-color: #FFA000;
+  border-left-color: #f57f17;
+}
+
+.roster-item.fielding-highlight-yellow {
+  background: #FFC107 !important;
+  color: #333 !important;
+  border-left-color: #FFA000 !important;
   font-weight: 600;
 }
 
 .roster-item.fielding-highlight-red {
-  background: #f44336;
-  color: white;
-  border-left-color: #c62828;
+  background: #f44336 !important;
+  color: white !important;
+  border-left-color: #c62828 !important;
   font-weight: 600;
 }
 
 .roster-item.fielding-highlight-green {
-  background: #4CAF50;
-  color: white;
-  border-left-color: #2E7D32;
+  background: #4CAF50 !important;
+  color: white !important;
+  border-left-color: #2E7D32 !important;
   font-weight: 600;
+}
+
+/* Fielding highlights take precedence over selected state */
+.team-rat-stack .roster-item.fielding-highlight-green,
+.team-content-kings .roster-item.fielding-highlight-green,
+.team-straw-hats .roster-item.fielding-highlight-green,
+.team-nine-lives .roster-item.fielding-highlight-green {
+  background: #4CAF50 !important;
+  border-left-color: #2E7D32 !important;
+  color: white !important;
+}
+
+.roster-icon {
+  display: inline-block;
+  font-size: 1.1em;
+  margin-right: 6px;
+  vertical-align: middle;
 }
 
 .roster-item-name {
@@ -118,6 +200,87 @@ body {
   color: #e0e0e0;
 }
 
+/* Team Color Classes */
+.team-rat-stack {
+  background: #f3e5f5;
+  border-left-color: #9C27B0;
+  border-top: 3px solid #9C27B0;
+}
+
+.team-rat-stack h3 {
+  border-bottom: 2px solid #9C27B0;
+}
+
+.team-rat-stack .roster-item {
+  border-left-color: #9C27B0;
+  background: white;
+}
+
+.team-rat-stack .roster-item:hover {
+  background: #f5f5f5;
+  border-left-color: #7b1fa2;
+}
+
+.team-content-kings {
+  background: #e3f2fd;
+  border-left-color: #2196F3;
+  border-top: 3px solid #2196F3;
+}
+
+.team-content-kings h3 {
+  border-bottom: 2px solid #2196F3;
+}
+
+.team-content-kings .roster-item {
+  border-left-color: #2196F3;
+  background: white;
+}
+
+.team-content-kings .roster-item:hover {
+  background: #f5f5f5;
+  border-left-color: #0d47a1;
+}
+
+.team-straw-hats {
+  background: #ffe0b2;
+  border-left-color: #e65100;
+  border-top: 3px solid #e65100;
+}
+
+.team-straw-hats h3 {
+  border-bottom: 2px solid #e65100;
+}
+
+.team-straw-hats .roster-item {
+  border-left-color: #e65100;
+  background: white;
+}
+
+.team-straw-hats .roster-item:hover {
+  background: #f5f5f5;
+  border-left-color: #bf360c;
+}
+
+.team-nine-lives {
+  background: #fffde7;
+  border-left-color: #FBC02D;
+  border-top: 3px solid #FBC02D;
+}
+
+.team-nine-lives h3 {
+  border-bottom: 2px solid #FBC02D;
+}
+
+.team-nine-lives .roster-item {
+  border-left-color: #FBC02D;
+  background: white;
+}
+
+.team-nine-lives .roster-item:hover {
+  background: #f5f5f5;
+  border-left-color: #f57f17;
+}
+
 h2 {
   color: #333;
   margin: 16px 0 12px 0;
@@ -139,6 +302,23 @@ label {
   font-weight: 600;
   font-size: 0.9em;
   min-width: 120px;
+}
+
+/* Baserunner background colors - lighter versions of team colors */
+.roster-item.baserunner-rat-stack {
+  background: #e8d5f2;
+}
+
+.roster-item.baserunner-content-kings {
+  background: #c5e1f5;
+}
+
+.roster-item.baserunner-straw-hats {
+  background: #ffd699;
+}
+
+.roster-item.baserunner-nine-lives {
+  background: #fff9e6;
 }
 
 select {
@@ -200,14 +380,19 @@ select:focus {
 }
 
 #tabs-box {
+  position: fixed;
+  right: 20px;
+  top: 100px;
+  width: 320px;
+  max-height: 70vh;
   background: white;
   border: 2px solid #ddd;
   border-radius: 8px;
   display: flex;
   flex-direction: column;
   flex: 0 0 auto;
-  min-width: 400px;
-  max-height: 300px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
 }
 
 #tabs-title {
@@ -217,6 +402,22 @@ select:focus {
   font-size: 1em;
   font-weight: 700;
   border-bottom: 2px solid #ddd;
+  flex-shrink: 0;
+}
+
+#tabs-header {
+  display: flex;
+  border-bottom: 2px solid #ddd;
+  background: #f5f5f5;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+#tabs-content {
+  flex: 1;
+  padding: 12px;
+  overflow-y: auto;
+  font-size: 0.85em;
 }
 
 #zone-and-bases {
@@ -253,26 +454,20 @@ select:focus {
   max-height: 100%;
 }
 
-#tabs-header {
-  display: none;
-  border-bottom: 2px solid #ddd;
-  background: #f5f5f5;
-  flex-shrink: 0;
-}
-
 .tab {
   flex: 1;
-  padding: 10px 12px;
+  padding: 8px 6px;
   background: #f5f5f5;
   border: none;
   border-right: 1px solid #ddd;
   cursor: pointer;
   color: #333;
   font-weight: 600;
-  font-size: 0.9em;
+  font-size: 0.75em;
   transition: all 0.2s ease;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  min-width: 40px;
 }
 
 .tab:last-child {
@@ -287,12 +482,6 @@ select:focus {
   background: #2a5298;
   color: white;
   box-shadow: inset 0 -3px 0 rgba(0,0,0,0.2);
-}
-
-#tabs-content {
-  flex: 1;
-  padding: 12px;
-  overflow-y: auto;
 }
 
 .tab-pane {
@@ -661,6 +850,10 @@ p {
   align-items: center;
 }
 
+.base-container:nth-child(2) {
+  transform: translateY(-24px);
+}
+
 .base-label {
   font-weight: 700;
   color: #666;
@@ -688,6 +881,27 @@ p {
   background: #4CAF50;
   color: white;
   border-color: #2E7D32;
+}
+
+.base-runner.occupied.team-rat-stack {
+  background: #9C27B0;
+  border-color: #6a1b9a;
+}
+
+.base-runner.occupied.team-content-kings {
+  background: #2196F3;
+  border-color: #1565c0;
+}
+
+.base-runner.occupied.team-straw-hats {
+  background: #e65100;
+  border-color: #bf360c;
+}
+
+.base-runner.occupied.team-nine-lives {
+  background: #FBC02D;
+  border-color: #f57f17;
+  color: #333;
 }
 
 #right-sidebar {
