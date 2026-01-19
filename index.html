@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZBL Simulation</title>
+
+    <link rel="stylesheet" href="style.css">
+    <script src="script.js" defer></script>
+</head>
+<body>
+    <div id="main-layout">
+        <div id="left-roster" class="roster-panel">
+            <h3>Pitching Team</h3>
+            <select id="pitchingTeamSelect" placeholder="Select Team" style="width: 100%; margin-bottom: 12px;">
+                <option value="" disabled selected>Select a team</option>
+                <option value="0">Rat Stack</option>
+                <option value="1">Content Kings</option>
+                <option value="2">Nine-Lives Nine</option>
+                <option value="3">Straw Hat Pirates</option>
+            </select>
+            <select id="pitcherSelect" placeholder="Select Pitcher" style="width: 100%; margin-bottom: 12px;"></select>
+            <div id="left-roster-list" class="roster-list"></div>
+        </div>
+        
+        <div id="simulation-container">
+            <div id="header-with-controls">
+                <h2>Simulation</h2>
+            </div>
+            <div id="top-controls">
+            </div>
+            
+            <div id="zone-display" style="display:none;">
+                <div id="zone-header">
+                    <h3>At The Plate</h3>
+                    <div id="inning-display">
+                        <span id="inning-text">Top 1st</span>
+                    </div>
+                    <div id="outs-display">
+                        <span id="outs-label">Outs:</span>
+                        <span id="outs-count">0</span>
+                    </div>
+                    <button id="nextBatterButton" class="zone-header-btn">Next Batter</button>
+                    <div id="score-display">
+                        <div class="team-score">
+                            <span class="team-name" id="pitching-team-name">-</span>
+                            <span class="team-score-value" id="pitching-team-score">0</span>
+                        </div>
+                        <div class="team-score">
+                            <span class="team-name" id="batting-team-name">-</span>
+                            <span class="team-score-value" id="batting-team-score">0</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="content-wrapper">
+                    <div id="batter-pitcher-display">
+                        <div class="player-section">
+                            <div class="player-label">Pitcher</div>
+                            <div id="pitcher-card" class="player-card">
+                                <div id="pitcher-team-name" style="font-size: 0.85em; color: #666; margin-bottom: 4px;"></div>
+                                <h4 id="pitcher-name"></h4>
+                                <div class="stats-grid">
+                                    <div class="stat"><span class="stat-label">Control:</span> <span id="pitcher-control">-</span></div>
+                                    <div class="stat"><span class="stat-label">Velocity:</span> <span id="pitcher-velocity">-</span></div>
+                                    <div class="stat"><span class="stat-label">Stamina:</span> <span id="pitcher-stamina">-</span></div>
+                                    <div class="stat"><span class="stat-label">Arm:</span> <span id="pitcher-arm">-</span></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="zone-and-bases">
+                            <div id="zone-wrapper">
+                                <div id="outcome-display">
+                                    <div id="outcome-line1"></div>
+                                    <div id="outcome-line2"></div>
+                                    <div id="outcome-line3"></div>
+                                </div>
+                                <div id="strike-zone">
+                                    <div class="zone-border"></div>
+                                    <div id="pitch-baseball"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="player-section">
+                            <div class="player-label">Batter</div>
+                            <div id="batter-card" class="player-card">
+                                <div id="batter-team-name" style="font-size: 0.85em; color: #666; margin-bottom: 4px;"></div>
+                                <h4 id="batter-name"></h4>
+                                <div class="stats-grid">
+                                    <div class="stat"><span class="stat-label">Contact:</span> <span id="batter-contact">-</span></div>
+                                    <div class="stat"><span class="stat-label">Power:</span> <span id="batter-power">-</span></div>
+                                    <div class="stat"><span class="stat-label">Eye:</span> <span id="batter-eye">-</span></div>
+                                    <div class="stat"><span class="stat-label">Speed:</span> <span id="batter-speed">-</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="bases-section">
+                        <h4>Bases</h4>
+                        <div id="bases-display">
+                            <div class="base-row">
+                                <div class="base-container">
+                                    <div class="base-label">1B</div>
+                                    <div class="base-runner" id="runner-1b">-</div>
+                                </div>
+                                <div class="base-container">
+                                    <div class="base-label">2B</div>
+                                    <div class="base-runner" id="runner-2b">-</div>
+                                </div>
+                                <div class="base-container">
+                                    <div class="base-label">3B</div>
+                                    <div class="base-runner" id="runner-3b">-</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="bottom-row">
+                        <div id="tabs-box">
+                            <h4 id="tabs-title">Result Info</h4>
+                            <div id="tabs-header"></div>
+                            <div id="tabs-content"></div>
+                            <div id="timeline-buttons">
+                                <button id="startButton" class="timeline-btn">Pitcher Delivery</button>
+                                <button id="batterResponseButton" class="timeline-btn" disabled>Batter Response</button>
+                                <button id="determineFielderButton" class="timeline-btn" disabled>Fielder Determination</button>
+                                <button id="handleCheckButton" class="timeline-btn" disabled>Handle Check</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="right-roster" class="roster-panel">
+            <h3>Batting Team</h3>
+            <select id="battingTeamSelect" placeholder="Select Team" style="width: 100%; margin-bottom: 12px;">
+                <option value="" disabled selected>Select a team</option>
+                <option value="0">Rat Stack</option>
+                <option value="1">Content Kings</option>
+                <option value="2">Nine-Lives Nine</option>
+                <option value="3">Straw Hat Pirates</option>
+            </select>
+            <select id="batterSelect" placeholder="Select Batter" style="width: 100%; margin-bottom: 12px;"></select>
+            <div id="right-roster-list" class="roster-list"></div>
+        </div>
+    </div>
+</body>
+</html>
