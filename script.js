@@ -17,18 +17,32 @@
 	let highlightedFielder = null; // Track which fielder is highlighted
 	let useManualRolls = false; // Toggle for manual dice rolls
 	let lastManualRoll = null; // Store last manual roll input
+	let doublePlayAttempt = null; // Track DP attempt state (e.g., { phase: 'toSecond', runnerOnFirst: 'name' })
+	let throwTarget = '1b'; // Track current throw target base
+	let playLog = []; // Track play log entries
 
-	function getRandomRoll(sides) {
+	function updateOutcomeDisplay(summary) {
+		// Display outcome as a single summary line
+		document.getElementById('outcome-line1').textContent = summary;
+		document.getElementById('outcome-line2').textContent = '';
+		document.getElementById('outcome-line3').textContent = '';
+	}
+
+	function getRandomRoll(sides, description = '') {
 		if (useManualRolls) {
-			return getManualRoll(sides);
+			return getManualRoll(sides, description);
 		}
 		return Math.floor(Math.random() * sides) + 1;
 	}
 
-	function getManualRoll(sides) {
+	function getManualRoll(sides, description = '') {
 		let roll;
+		const prompt_text = description 
+			? `Enter ${description} (D${sides}, 1-${sides}):`
+			: `Enter a D${sides} roll (1-${sides}):`;
+		
 		while (true) {
-			const input = prompt(`Enter a D${sides} roll (1-${sides}):`);
+			const input = prompt(prompt_text);
 			if (input === null) return Math.floor(Math.random() * sides) + 1; // Cancel - use auto roll
 			
 			roll = parseInt(input);
@@ -101,6 +115,39 @@
 		activeTab = tabId;
 	}
 
+	function addPlayLogEntry(message, isInningStart = false) {
+		// Add an entry to the play log
+		playLog.push(message);
+		
+		const logContainer = document.getElementById('play-log-entries');
+		if (logContainer) {
+			const entry = document.createElement('div');
+			entry.className = isInningStart ? 'play-log-entry inning-start' : 'play-log-entry';
+			entry.textContent = message;
+			logContainer.insertBefore(entry, logContainer.firstChild);
+			
+			// Keep only the last 50 entries
+			while (logContainer.children.length > 50) {
+				logContainer.removeChild(logContainer.lastChild);
+			}
+		}
+	}
+
+	function logInningStart() {
+		// Log the start of a new inning
+		const inningPosition = isTopInning ? 'Top' : 'Bottom';
+		const inningOrdinal = currentInning === 1 ? '1st' : currentInning === 2 ? '2nd' : currentInning === 3 ? '3rd' : `${currentInning}th`;
+		const message = `═══ ${inningPosition} ${inningOrdinal} Inning ═══`;
+		addPlayLogEntry(message, true);
+	}
+
+	function logPlay(battingTeamName, playerName, description) {
+		// Log a single play
+		// Example: logPlay('Rat Stack', 'doneZo', 'flies out to right fielder Travis')
+		const message = `${playerName} ${description}`;
+		addPlayLogEntry(message);
+	}
+
 	function updateBasesDisplay() {
 		// Update the bases display with runner names and team colors
 		const bases = ['1b', '2b', '3b'];
@@ -110,6 +157,19 @@
 			2: 'team-nine-lives',       // Nine-Lives Nine - Yellow
 			3: 'team-straw-hats'        // Straw Hat Pirates - Red
 		};
+		
+		// Update home base with current batter
+		const homeElement = document.getElementById('runner-home');
+		if (homeElement && currentBatterIndex !== -1) {
+			const batter = teamsData[battingTeamIndex].players[currentBatterIndex];
+			homeElement.textContent = batter.name;
+			homeElement.classList.remove('team-rat-stack', 'team-content-kings', 'team-nine-lives', 'team-straw-hats', 'occupied');
+			homeElement.classList.add('occupied');
+			const teamColorClass = teamColorMap[battingTeamIndex];
+			if (teamColorClass) {
+				homeElement.classList.add(teamColorClass);
+			}
+		}
 		
 		bases.forEach(base => {
 			const element = document.getElementById(`runner-${base}`);
@@ -134,6 +194,24 @@
 				} else {
 					element.textContent = '-';
 				}
+			}
+		});
+	}
+
+	function applyRunnerAnimation(basesToAnimate) {
+		// Apply running animation to specified bases
+		// basesToAnimate: array of base names like ['1b', '2b'] that are receiving runners
+		basesToAnimate.forEach(base => {
+			const element = document.getElementById(`runner-${base}`);
+			if (element) {
+				element.classList.remove('running');
+				// Trigger reflow to restart animation
+				void element.offsetWidth;
+				element.classList.add('running');
+				// Remove animation class after it completes
+				setTimeout(() => {
+					element.classList.remove('running');
+				}, 850);
 			}
 		});
 	}
@@ -210,6 +288,7 @@
 		updateInningDisplay();
 		updateScoreDisplay();
 		updateBasesDisplay();
+		logInningStart();
 		populateRostersForTeams();
 		updatePitcherSelect();
 		updateBatterSelect();
@@ -238,8 +317,11 @@
 		const team = teamsData[pitchingTeamIndex];
 		if (!team || !team.players) return;
 		
-		// Find the player with this position
-		const fielder = team.players.find(p => p.position === fielderPosition || p.secondaryPos === fielderPosition);
+		// Find the player with this position (prioritize primary position over secondary)
+		let fielder = team.players.find(p => p.position === fielderPosition);
+		if (!fielder) {
+			fielder = team.players.find(p => p.secondaryPos === fielderPosition);
+		}
 		if (!fielder) return;
 		
 		// Find their index in the roster
@@ -249,14 +331,44 @@
 		// Store the highlighted fielder info
 		highlightedFielder = { index: fielderIndex, color: color };
 		
-		// Highlight their player box in the left roster with specified color
+		// Clear fielding highlights only (keep 'selected' class for pitcher)
 		const rosterItems = document.querySelectorAll('#left-roster-list .roster-item');
 		rosterItems.forEach((item, index) => {
+			// Remove fielding highlight classes
+			item.classList.remove('fielding-highlight-yellow', 'fielding-highlight-red', 'fielding-highlight-green');
+			
+			// Apply fielder highlight to correct index
 			if (index === fielderIndex) {
-				item.classList.remove('fielding-highlight-yellow', 'fielding-highlight-red', 'fielding-highlight-green');
 				item.classList.add(`fielding-highlight-${color}`);
-			} else {
-				item.classList.remove('fielding-highlight-yellow', 'fielding-highlight-red', 'fielding-highlight-green');
+			}
+		});
+	}
+
+	function highlightFielderByName(playerName, color = 'yellow') {
+		// Get the fielding team (pitching team)
+		const team = teamsData[pitchingTeamIndex];
+		if (!team || !team.players) return;
+		
+		// Find the player by name
+		const fielder = team.players.find(p => p.name === playerName);
+		if (!fielder) return;
+		
+		// Find their index in the roster
+		const fielderIndex = team.players.indexOf(fielder);
+		if (fielderIndex === -1) return;
+		
+		// Store the highlighted fielder info
+		highlightedFielder = { index: fielderIndex, color: color };
+		
+		// Clear all highlights first, then highlight the fielder
+		const rosterItems = document.querySelectorAll('#left-roster-list .roster-item');
+		rosterItems.forEach((item, index) => {
+			// Remove all highlight and selected classes
+			item.classList.remove('fielding-highlight-yellow', 'fielding-highlight-red', 'fielding-highlight-green', 'selected');
+			
+			// Apply fielder highlight to correct index
+			if (index === fielderIndex) {
+				item.classList.add(`fielding-highlight-${color}`);
 			}
 		});
 	}
@@ -665,7 +777,6 @@
 		document.getElementById('outcome-line1').textContent = '';
 		document.getElementById('outcome-line2').textContent = '';
 		document.getElementById('outcome-line3').textContent = '';
-		document.getElementById('outcome-line3').textContent = '';
 		document.getElementById('pitch-baseball').classList.remove('show');
 		clearFielderHighlight();
 		document.getElementById('startButton').disabled = false;
@@ -686,6 +797,8 @@
 	function addRunnerToBase(baseName) {
 		const batter = teamsData[battingTeamIndex].players[currentBatterIndex];
 		runners[baseName] = batter.name;
+		// Animate the runner being added to the base
+		applyRunnerAnimation([baseName]);
 	}
 
 	function advanceRunners() {
@@ -695,15 +808,34 @@
 		const runner2b = runners['2b'];
 		const runner1b = runners['1b'];
 		
+		// Track which bases are receiving runners for animation
+		const basesToAnimate = [];
+		
 		// Runner on 3B scores
 		if (runner3b) {
 			teamScores.batting++;
 		}
 		
 		// Advance remaining runners
-		runners['3b'] = runner2b || null;
-		runners['2b'] = runner1b || null;
+		if (runner2b) {
+			runners['3b'] = runner2b;
+			basesToAnimate.push('3b');
+		} else {
+			runners['3b'] = null;
+		}
+		
+		if (runner1b) {
+			runners['2b'] = runner1b;
+			basesToAnimate.push('2b');
+		} else {
+			runners['2b'] = null;
+		}
 		runners['1b'] = null;
+		
+		// Apply animation to bases receiving runners
+		if (basesToAnimate.length > 0) {
+			applyRunnerAnimation(basesToAnimate);
+		}
 	}
 
 	function advanceRunnersOnWalk() {
@@ -716,36 +848,44 @@
 		const runner1b = runners['1b'];
 		
 		// Build the new state step by step
-		let new1b = null;
+		let new1b = null; // Batter will be added after, so 1B is always empty initially
 		let new2b = null;
 		let new3b = null;
+		const basesToAnimate = [];
 		
 		// 1B runner always advances to 2B (batter is coming to 1B)
 		if (runner1b) {
 			new2b = runner1b;
+			basesToAnimate.push('2b');
 		}
 		
 		// 2B runner advances to 3B only if 1B is occupied (forced chain)
 		if (runner2b && runner1b) {
 			new3b = runner2b;
-		} else {
-			// 2B runner stays if not forced
-			new3b = runner2b;
+			basesToAnimate.push('3b');
+		} else if (runner2b) {
+			// 2B runner stays at 2B if not forced
+			new2b = runner2b;
 		}
 		
-		// 3B runner scores only if all bases are loaded (full forced chain)
+		// 3B runner scores only if both 1B and 2B are occupied (full forced chain)
 		if (runner3b && runner2b && runner1b) {
+			flashBase('home');
 			teamScores.batting++;
-		} else {
-			// 3B runner stays if not part of a full forced advance
-			// But if 2B is being forced into 3B, then 3B must move somewhere (score or stay)
-			// In forced advance scenario, 3B would score. Otherwise stay.
-			new3b = runner2b && runner1b ? runner2b : runner3b;
+			// new3b stays null since runner scored
+		} else if (runner3b) {
+			// 3B runner stays at 3B if not part of full forced advance
+			new3b = runner3b;
 		}
 		
 		runners['1b'] = new1b;
 		runners['2b'] = new2b;
 		runners['3b'] = new3b;
+		
+		// Apply animation to bases receiving runners
+		if (basesToAnimate.length > 0) {
+			applyRunnerAnimation(basesToAnimate);
+		}
 	}
 
 	function hasRunners() {
@@ -756,6 +896,7 @@
 	function advanceRunnersMultipleBases(bases) {
 		// Advance runners by specified number of bases (1 for single, 4 for home run)
 		// Track which runners score - score goes to batting team
+		const basesToAnimate = [];
 		
 		if (bases >= 4) {
 			// Home run: all runners score, including runner on 3B
@@ -782,18 +923,26 @@
 			if (runners['2b']) {
 				runners['3b'] = runners['2b'];
 				runners['2b'] = null;
+				basesToAnimate.push('3b');
 			}
 			if (runners['1b']) {
 				runners['2b'] = runners['1b'];
 				runners['1b'] = null;
+				basesToAnimate.push('2b');
 			}
 		}
+		
+		// Apply animation to bases receiving runners
+		if (basesToAnimate.length > 0) {
+			applyRunnerAnimation(basesToAnimate);
+		}
 	}
+
 
 	function determineFielder() {
 		let fielderType;
 		switch(brOutcome) {
-			case 'Dribbler*':
+			case 'Dribbler':
 			case 'Bloop':
 			case 'Screamer*':
 				fielderType = 'INF';
@@ -811,7 +960,7 @@
 		let gloveStat = 0;
 		let tabContent;
 		if (fielderType === 'INF') {
-			const roll = Math.floor(Math.random() * 20) + 1;
+			const roll = getRandomRoll(20, 'Infielder Selection Die');
 			if (roll <= 3) {
 				fielderName = 'Pitcher';
 				fielderCode = 'P';
@@ -831,9 +980,9 @@
 				fielderName = 'Third Base';
 				fielderCode = '3B';
 			}
-			tabContent = `${createTableHeader()}${createTableRow('', brOutcome)}${createTableRow(roll, 'Infielder Selection Die (D20)')}${createTableRow('', fielderName, true)}${closeTable()}`;
+			tabContent = `${createTableHeader()}${createTableRow(roll, 'Infielder Selection Die (D20)')}${createTableRow(fielderName, 'Result', true)}${closeTable()}`;
 		} else if (fielderType === 'OF') {
-			const roll = Math.floor(Math.random() * 6) + 1;
+			const roll = getRandomRoll(6, 'Outfielder Selection Die');
 			if (roll <= 2) {
 				fielderName = 'Left Fielder';
 				fielderCode = 'LF';
@@ -844,30 +993,40 @@
 				fielderName = 'Right Fielder';
 				fielderCode = 'RF';
 			}
-			tabContent = `${createTableHeader()}${createTableRow('', brOutcome)}${createTableRow(roll, 'Outfielder Selection Die (D6)')}${createTableRow('', fielderName, true)}${closeTable()}`;
+			tabContent = `${createTableHeader()}${createTableRow(roll, 'Outfielder Selection Die (D6)')}${createTableRow(fielderName, 'Result', true)}${closeTable()}`;
 		}
 		
 		// Get fielder's glove stat from player data
-		const pitcher = document.getElementById('pitcher-name').textContent;
-		const batter = document.getElementById('batter-name').textContent;
-		const selectedTeam = teamsData.find(t => t.players.some(p => p.name === pitcher || p.name === batter));
-		if (selectedTeam && fielderName) {
-			const fielder = selectedTeam.players.find(p => p.name === fielderName);
-			gloveStat = fielder ? fielder.glove : 0;
+		const pitchingTeam = teamsData[pitchingTeamIndex];
+		let armStat = 0;
+		let actualFielderName = fielderName; // Keep position name for display
+		
+		if (pitchingTeam && fielderCode) {
+			// Find the player at this fielding position
+			const fielder = pitchingTeam.players.find(p => p.position === fielderCode || p.secondaryPos === fielderCode);
+			if (fielder) {
+				gloveStat = fielder.glove;
+				armStat = fielder.arm;
+				actualFielderName = fielder.name; // Use actual player name
+			}
 		}
 		
-		// Store fielder data for handle check
+		// Store fielder data for handle check and throw attempt
 		fielderData = {
-			name: fielderName,
+			name: actualFielderName,
 			code: fielderCode,
-			glove: gloveStat
+			glove: gloveStat,
+			arm: armStat
 		};
 		
 		// Create Fielder tab if content exists
 		if (tabContent) {
 			createTab('fielder', 'DF', tabContent, true);
-			// Highlight the fielder in the roster
+			// Highlight the fielder in the roster by position code
 			highlightFielder(fielderCode);
+			// Show fielder info in outcome display
+			document.getElementById('outcome-line2').textContent = `${fielderName} attempting to field`;
+			document.getElementById('outcome-line2').style.display = 'block';
 			// Enable handle check button
 			document.getElementById('handleCheckButton').disabled = false;
 			// Disable the determine fielder button after it's been clicked
@@ -875,14 +1034,196 @@
 		}
 	}
 
+	function performTagUp(fielderData) {
+		// Determine which runners can tag up (on 2nd or 3rd)
+		const runner3b = runners['3b'];
+		const runner2b = runners['2b'];
+		let tagUpResults = [];
+		
+		// If runner on 3rd, they roll confidence to attempt to score
+		if (runner3b) {
+			const runner3bPlayer = teamsData[battingTeamIndex].players.find(p => p.name === runner3b);
+			if (runner3bPlayer) {
+				const confidenceRoll = getRandomRoll(6, runner3b + ' Confidence Die');
+				const confidence = confidenceRoll + runner3bPlayer.speed;
+				
+				const tagUpInfo = {
+					runner: runner3b,
+					base: '3b',
+					target: 'home',
+					confidenceRoll: confidenceRoll,
+					speed: runner3bPlayer.speed,
+					confidence: confidence,
+					hasConfidence: confidence >= 4
+				};
+				tagUpResults.push(tagUpInfo);
+				
+				// If confidence >= 4, runner attempts to score
+				if (confidence >= 4) {
+					flashBase('home');
+					performTagUpThrow(runner3b, '3b', 'home', fielderData, tagUpResults);
+				}
+				
+				// If runner on 2nd exists, they advance to 3b automatically (lead runner is going)
+				if (runner2b) {
+					runners['3b'] = runner2b;
+					runners['2b'] = null;
+				}
+			}
+		} 
+		// If only runner on 2nd (no one on 3rd), they roll confidence to attempt to go to 3b
+		else if (runner2b) {
+			const runner2bPlayer = teamsData[battingTeamIndex].players.find(p => p.name === runner2b);
+			if (runner2bPlayer) {
+				const confidenceRoll = getRandomRoll(6, runner2b + ' Confidence Die');
+				const confidence = confidenceRoll + runner2bPlayer.speed;
+				
+				const tagUpInfo = {
+					runner: runner2b,
+					base: '2b',
+					target: '3b',
+					confidenceRoll: confidenceRoll,
+					speed: runner2bPlayer.speed,
+					confidence: confidence,
+					hasConfidence: confidence >= 4
+				};
+				tagUpResults.push(tagUpInfo);
+				
+				// If confidence >= 4, runner attempts to advance to 3b
+				if (confidence >= 4) {
+					performTagUpThrow(runner2b, '2b', '3b', fielderData, tagUpResults);
+				}
+			}
+		}
+		
+		// Create TAG tab with all results
+		if (tagUpResults.length > 0) {
+			let tagTabContent = createTableHeader();
+			
+			tagUpResults.forEach((info, index) => {
+				if (info.throwResult) {
+					// This runner had a throw attempt
+					tagTabContent += createTableRow(info.runner, 'Runner');
+					tagTabContent += createTableRow(info.confidenceRoll, 'Confidence Die (D6)');
+					tagTabContent += createTableRow(info.speed, "Runner's Speed");
+					tagTabContent += createTableRow(info.confidence, 'Total Confidence', true);
+					tagTabContent += `<tr style="background: #e3f2fd;"><td>Decision</td><td style="font-weight: 600; color: #0d47a1;">Attempts to ${info.target === 'home' ? 'score' : 'advance'}</td></tr>`;
+					
+					// Throw results
+					tagTabContent += `<tr style="background: #fff3e0; border-top: 2px solid #ff9800;"><td colspan="2" style="font-weight: 600; padding: 8px;">TAG UP THROW TO ${info.target.toUpperCase()}</td></tr>`;
+					tagTabContent += createTableRow(info.runnerRoll, "Runner's Die (D6)");
+					tagTabContent += createTableRow(info.speed, "Runner's Speed");
+					tagTabContent += createTableRow(info.runnerTotal, 'Runner Total');
+					tagTabContent += createTableRow(info.fielderRoll, "Fielder's Die (D6)");
+					tagTabContent += createTableRow(info.fielderArm, "Fielder's Arm");
+					tagTabContent += createTableRow(info.fielderTotal, 'Fielder Total');
+					
+					const resultColor = info.isOut ? '#f44336' : '#4CAF50';
+					const resultText = info.isOut ? '❌ OUT' : '✓ SAFE';
+					tagTabContent += `<tr style="background: ${resultColor}; color: white;"><td>RESULT</td><td style="font-weight: 600; font-size: 1.1em;">${resultText}</td></tr>`;
+					
+					if (index < tagUpResults.length - 1) {
+						tagTabContent += `<tr style="background: #f5f5f5;"><td colspan="2" style="height: 8px;"></td></tr>`;
+					}
+				} else {
+					// Runner doesn't have confidence
+					tagTabContent += createTableRow(info.runner, 'Runner');
+					tagTabContent += createTableRow(info.confidenceRoll, 'Confidence Die (D6)');
+					tagTabContent += createTableRow(info.speed, "Runner's Speed");
+					tagTabContent += createTableRow(info.confidence, 'Total Confidence', true);
+					
+					const resultColor = '#f44336';
+					const resultText = '❌ NO CONFIDENCE';
+					tagTabContent += `<tr style="background: ${resultColor}; color: white;"><td>DECISION</td><td style="font-weight: 600; font-size: 1.1em;">${resultText}</td></tr>`;
+					
+					if (index < tagUpResults.length - 1) {
+						tagTabContent += `<tr style="background: #f5f5f5;"><td colspan="2" style="height: 8px;"></td></tr>`;
+					}
+				}
+			});
+			
+			tagTabContent += closeTable();
+			createTab('tag', 'TAG', tagTabContent, true);
+		}
+		
+		updateBasesDisplay();
+		updateScoreDisplay();
+		updateOutsDisplay();
+	}
+
+	function performTagUpThrow(runnerName, currentBase, targetBase, fielderData, tagUpResults) {
+		// Speed vs Arm test for tag up attempt
+		const runnerPlayer = teamsData[battingTeamIndex].players.find(p => p.name === runnerName);
+		const fieldingTeam = teamsData[pitchingTeamIndex];
+		
+		// Find the fielder playing the outfield position
+		let fielderArm = fielderData.arm;
+		const ofPlayer = fieldingTeam.players.find(p => 
+			p.position === 'LF' || p.position === 'CF' || p.position === 'RF' ||
+			p.secondaryPos === 'LF' || p.secondaryPos === 'CF' || p.secondaryPos === 'RF'
+		);
+		if (ofPlayer) {
+			fielderArm = ofPlayer.arm;
+		}
+		
+		// Both roll D6
+		const fielderRoll = getRandomRoll(6, 'Tag Up Throw - Fielder Arm Die');
+		const runnerRoll = getRandomRoll(6, runnerName + ' Tag Up Throw Die');
+		
+		// Calculate totals
+		const fielderTotal = fielderRoll + fielderArm;
+		const runnerTotal = runnerRoll + runnerPlayer.speed;
+		
+		// Defense wins ties
+		const isOut = fielderTotal >= runnerTotal;
+		
+		if (isOut) {
+			// Remove runner (they're out) and increment outs
+			outs++;
+			if (targetBase === 'home') {
+				runners['3b'] = null;
+			} else {
+				runners['2b'] = null;
+			}
+		} else {
+			// Advance runner
+			if (targetBase === 'home') {
+				// Runner scores
+				teamScores.batting++;
+				runners['3b'] = null;
+			} else {
+				// Runner advances to 3b
+				runners['3b'] = runnerName;
+				runners['2b'] = null;
+			}
+		}
+		
+		// Store throw result in tagUpResults for display
+		const tagUpInfo = tagUpResults.find(info => info.runner === runnerName);
+		if (tagUpInfo) {
+			tagUpInfo.throwResult = true;
+			tagUpInfo.runnerRoll = runnerRoll;
+			tagUpInfo.runnerTotal = runnerTotal;
+			tagUpInfo.fielderRoll = fielderRoll;
+			tagUpInfo.fielderArm = fielderArm;
+			tagUpInfo.fielderTotal = fielderTotal;
+			tagUpInfo.isOut = isOut;
+		}
+		
+		// Update display with throw result
+		const resultText = isOut ? `TAG UP OUT at ${targetBase === 'home' ? 'HOME' : '3RD'}` : `TAG UP SAFE at ${targetBase === 'home' ? 'HOME' : '3RD'}`;
+		document.getElementById('outcome-line2').textContent = resultText;
+		document.getElementById('outcome-line2').style.display = 'block';
+	}
+
 	function handleCheck() {
 		// Handle Score = D6 Roll + Fielder's Glove Stat
-		const roll = Math.floor(Math.random() * 6) + 1;
+		const roll = getRandomRoll(6, 'Handle Check Die');
 		const handleScore = roll + fielderData.glove;
 		
 		// Determine required score based on Batter Response Outcome
 		const handleScoreNeeded = {
-			'Dribbler*': 4,
+			'Dribbler': 4,
 			'Can of Corn': 3,
 			'Bloop': 5,
 			'Screamer*': 6,
@@ -899,16 +1240,28 @@
 		let result;
 		if (handled) {
 			result = 'Handled';
-			// Increment outs for successful fielding
-			outs++;
-			updateOutsDisplay();
-			updateNextBatterButton();
-			
-			// Update outcome display above zone for caught balls
+			// For catchable balls, check if runners can tag up
 			if (isCatchable) {
-				document.getElementById('outcome-line1').textContent = 'BATTER OUT - CAUGHT';
-				document.getElementById('outcome-line2').textContent = '';
-				document.getElementById('outcome-line3').textContent = 'OUT';
+				outs++;
+				updateOutsDisplay();
+				updateNextBatterButton();
+				updateOutcomeDisplay('BATTER OUT - CAUGHT');
+				const batter = teamsData[battingTeamIndex].players[currentBatterIndex];
+				logPlay(teamsData[battingTeamIndex].name, batter.name, `is caught by ${fielderData.name}`);
+				
+				// Show tag-up button if there are runners on 2b or 3b
+				const tagUpButton = document.getElementById('tagUpButton');
+				if ((runners['2b'] !== null || runners['3b'] !== null)) {
+					tagUpButton.style.display = 'inline-block';
+					tagUpButton.disabled = false;
+				} else {
+					tagUpButton.style.display = 'none';
+					tagUpButton.disabled = true;
+				}
+			} else {
+				// Ground ball is handled - don't add batter to first yet
+				// The throw attempt will determine final base assignments
+				// For non-ground balls, batter will be placed on base if safe on throw
 			}
 		} else {
 			result = 'Not Handled - Single, Runners advance 1 base';
@@ -916,40 +1269,396 @@
 			advanceRunners();
 			addRunnerToBase('1b');
 			updateBasesDisplay();
+			populateRostersForTeams();
 			updateScoreDisplay();
+			const batter = teamsData[battingTeamIndex].players[currentBatterIndex];
+			logPlay(teamsData[battingTeamIndex].name, batter.name, `gets a hit to ${brOutcome.toLowerCase()}`);
+			
+			// Hide tag-up button for non-catchable balls
+			const tagUpButton = document.getElementById('tagUpButton');
+			tagUpButton.style.display = 'none';
+			tagUpButton.disabled = true;
 		}
 		
 		// Update fielder highlight color based on handle result
 		updateFielderHighlightColor(handled);
 		
+		// Update outcome display with handle result
+		const handleStatus = handled ? 'Handled' : 'Not handled';
+		document.getElementById('outcome-line2').textContent = `${fielderData.name} - ${handleStatus}`;
+		document.getElementById('outcome-line2').style.display = 'block';
+		
 		// Create tab content
-		const tabContent = `${createTableHeader()}${createTableRow(roll, 'Handle Check Die (D6)')}${createTableRow(fielderData.glove, "Fielder's Glove Stat")}${createTableRow(handleScore, 'Total Handle Score', true)}${createTableRow(scoreNeeded, 'Score Needed')}${createTableRow(result, 'Result', true)}${closeTable()}`;
+		const tabContent = `${createTableHeader()}${createTableRow(roll, 'Handle Check Die (D6)')}${createTableRow(fielderData.glove, "Fielder's Glove Stat")}${createTableRow(handleScore, 'Total Handle Score', true)}${createTableRow(scoreNeeded, 'Score Needed')}${createTableRow(result === 'Handled' ? 'SUCCESS' : 'FAILURE', 'Handle Result', true)}${closeTable()}`;
 		createTab('handle', 'HC', tabContent, true);
+		
+		// Show throw button if ball was handled and is NOT catchable (needs throw to base)
+		if (handled && !isCatchable) {
+			// Determine throw target: Ground balls with runners on base attempt double plays
+			const isGroundBall = ['Dribbler', 'Screamer*'].includes(brOutcome);
+			const runnerOnFirst = runners['1b'] !== null;
+			const runnerOnSecond = runners['2b'] !== null;
+			const runnerOnThird = runners['3b'] !== null;
+			const canAttemptDoublePlay = outs < 2; // No DP if already 2 outs
+			
+			if (isGroundBall && runnerOnFirst && canAttemptDoublePlay) {
+				// Determine the farthest forced base to throw to
+				let firstThrowTarget = '2b'; // Default to second base
+				
+				// If bases are loaded (runners on 1B, 2B, 3B), throw to home (farthest forced)
+				if (runnerOnFirst && runnerOnSecond && runnerOnThird) {
+					firstThrowTarget = 'home';
+				}
+				// If runners on 1B and 2B, throw to 3B
+				else if (runnerOnFirst && runnerOnSecond) {
+					firstThrowTarget = '3b';
+				}
+				// Otherwise throw to 2B (just runner on 1B forces runner to 2B)
+				
+				throwTarget = firstThrowTarget;
+				doublePlayAttempt = {
+					phase: 'toSecond',
+					primaryFielderCode: fielderData.code,
+					runnerOnFirst: runners['1b'],
+					batter: teamsData[battingTeamIndex].players[currentBatterIndex].name
+				};
+				document.getElementById('outcome-line3').textContent = 'Double Play Attempt!';
+				document.getElementById('outcome-line3').style.display = 'block';
+			} else {
+				// No double play: throw to first base
+				throwTarget = '1b';
+				doublePlayAttempt = null;
+				document.getElementById('outcome-line3').style.display = 'none';
+			}
+			
+			// Flash the target base to show where the throw will go
+			flashBase(throwTarget);
+			
+			// Create throw button if it doesn't exist
+			let throwButton = document.getElementById('throwButton');
+			if (!throwButton) {
+				throwButton = document.createElement('button');
+				throwButton.id = 'throwButton';
+				throwButton.className = 'timeline-btn';
+				throwButton.textContent = 'Throw';
+				throwButton.addEventListener('click', throwAttempt);
+				document.getElementById('timeline-buttons').appendChild(throwButton);
+			}
+			throwButton.disabled = false;
+		} else {
+			const throwButton = document.getElementById('throwButton');
+			if (throwButton) throwButton.disabled = true;
+		}
 		
 		// Disable the handle check button after it's been clicked
 		document.getElementById('handleCheckButton').disabled = true;
 	}
 
+	function tagUp() {
+		// Execute tag-up system for runners on 2nd or 3rd
+		performTagUp(fielderData);
+		
+		// Hide tag-up button and disable it after clicking
+		const tagUpButton = document.getElementById('tagUpButton');
+		tagUpButton.disabled = true;
+		tagUpButton.style.display = 'none';
+	}
+
+	function flashBase(baseName) {
+		// Flash the target base to show where the throw is going
+		const baseElement = document.getElementById(`runner-${baseName}`);
+		if (baseElement) {
+			// Remove the class if it exists to reset animation
+			baseElement.classList.remove('base-flash');
+			// Trigger reflow to restart animation
+			void baseElement.offsetWidth;
+			// Add the flash animation class (will stay until removed)
+			baseElement.classList.add('base-flash');
+		}
+	}
+
+	function stopFlashBase() {
+		// Stop flashing on all bases
+		const bases = ['1b', '2b', '3b'];
+		bases.forEach(base => {
+			const baseElement = document.getElementById(`runner-${base}`);
+			if (baseElement) {
+				baseElement.classList.remove('base-flash');
+			}
+		});
+	}
+
+	function throwAttempt() {
+		// Disable throw button immediately to prevent multiple clicks
+		const throwButton = document.getElementById('throwButton');
+		if (throwButton) throwButton.disabled = true;
+		
+		// Speed vs Arm Test: Fielder's Arm vs Runner's Speed
+		const pitcher = teamsData[pitchingTeamIndex].players[currentPitcherIndex];
+		const batter = teamsData[battingTeamIndex].players[currentBatterIndex];
+		
+		// Fielder's arm stat
+		let fielderArm = fielderData.arm || pitcher.arm;
+		
+		// For double play second throw (to first base), use the secondary fielder's arm with -1 debuff
+		if (doublePlayAttempt && doublePlayAttempt.phase === 'toFirstDP') {
+			// Determine secondary fielder based on primary fielder's position
+			let secondaryFielderCode = '';
+			const primaryCode = doublePlayAttempt.primaryFielderCode;
+			
+			if (primaryCode === '3B') {
+				secondaryFielderCode = 'SS'; // SS covers 2nd, throws to 1B
+			} else if (primaryCode === 'SS') {
+				secondaryFielderCode = '2B'; // 2B covers 2nd, throws to 1B
+			} else if (primaryCode === '2B') {
+				secondaryFielderCode = 'SS'; // SS covers 2nd, throws to 1B
+			} else if (primaryCode === '1B') {
+				secondaryFielderCode = '2B'; // 2B covers 2nd, throws to 1B
+			}
+			
+			// Get the secondary fielder's arm stat
+			const pitchingTeam = teamsData[pitchingTeamIndex];
+			if (pitchingTeam && secondaryFielderCode) {
+				const secondaryFielder = pitchingTeam.players.find(p => p.position === secondaryFielderCode || p.secondaryPos === secondaryFielderCode);
+				if (secondaryFielder) {
+					fielderArm = Math.max(0, secondaryFielder.arm - 1); // Apply -1 debuff
+				}
+			}
+		}
+		
+		// Determine runner and their speed based on throw target
+		let runner, runnerSpeed, targetBaseDisplay, targetBase;
+		
+		if (doublePlayAttempt && doublePlayAttempt.phase === 'toSecond') {
+			// First throw of DP: throw to first forced base (determined earlier)
+			// Could be home, 3B, or 2B depending on base runners
+			targetBase = throwTarget;
+			
+			// Determine which runner is being forced
+			if (throwTarget === 'home') {
+				// Runner from 3B forced to home
+				runner = teamsData[battingTeamIndex].players.find(p => p.name === runners['3b']);
+				runnerSpeed = runner ? runner.speed : 0;
+				targetBaseDisplay = 'HOME';
+			} else if (throwTarget === '3b') {
+				// Runner from 2B forced to 3B
+				runner = teamsData[battingTeamIndex].players.find(p => p.name === runners['2b']);
+				runnerSpeed = runner ? runner.speed : 0;
+				targetBaseDisplay = 'THIRD BASE';
+			} else {
+				// Runner from 1B forced to 2B
+				runner = teamsData[battingTeamIndex].players.find(p => p.name === doublePlayAttempt.runnerOnFirst);
+				runnerSpeed = runner ? runner.speed : 0;
+				targetBaseDisplay = 'SECOND BASE';
+			}
+		} else if (doublePlayAttempt && doublePlayAttempt.phase === 'toFirstDP') {
+			// Second throw of DP: throw to first base to get batter
+			targetBase = '1b';
+			runnerSpeed = batter.speed;
+			targetBaseDisplay = 'FIRST BASE';
+		} else {
+			// Regular throw to first base
+			targetBase = '1b';
+			runnerSpeed = batter.speed;
+			targetBaseDisplay = 'FIRST BASE';
+		}
+		
+		// Both roll D6
+		const fielderRoll = getRandomRoll(6, `Throw Attempt - Fielder Arm Die (to ${targetBaseDisplay})`);
+		const runnerRoll = getRandomRoll(6, `Throw Attempt - Runner Speed Die (to ${targetBaseDisplay})`);
+		
+		// Calculate totals: fielder's roll + arm vs runner's roll + speed
+		const fielderTotal = fielderRoll + fielderArm;
+		const runnerTotal = runnerRoll + runnerSpeed;
+		
+		// Defense wins ties
+		const isOut = fielderTotal >= runnerTotal;
+		
+		let result;
+		let dpResult = null;
+		
+		if (doublePlayAttempt && doublePlayAttempt.phase === 'toSecond') {
+			// First throw of DP attempt
+			if (isOut) {
+				// Determine result message based on throw target
+				let resultMessage = `OUT at ${targetBaseDisplay}`;
+				let runnerBase = '1b';
+				
+				if (throwTarget === 'home') {
+					resultMessage = `OUT at HOME - Runner from 3rd is out`;
+					runnerBase = '3b';
+				} else if (throwTarget === '3b') {
+					resultMessage = `OUT at THIRD - Runner from 2nd is out`;
+					runnerBase = '2b';
+				} else {
+					resultMessage = `OUT at SECOND - Runner from 1st is out`;
+					runnerBase = '1b';
+				}
+				
+				result = resultMessage;
+				dpResult = { firstThrow: true, isOut: true };
+				
+				// Remove runner from base (they're out)
+				runners[runnerBase] = null;
+				
+				// If runner on base closer to batter, advance them to the base where the out was made
+				if (throwTarget === 'home' && runners['2b']) {
+					runners['3b'] = runners['2b'];
+					runners['2b'] = null;
+				} else if (throwTarget === '3b' && runners['1b']) {
+					runners['2b'] = runners['1b'];
+					runners['1b'] = null;
+				} else if (throwTarget === '2b' && runners['1b']) {
+					runners['1b'] = null; // Already handled above
+				}
+				
+				// Now attempt second throw to first base for batter
+				doublePlayAttempt.phase = 'toFirstDP';
+				doublePlayAttempt.firstThrowSuccess = true;
+				
+				// Create HTML for first throw result before second throw
+				const firstThrowContent = `
+					<div style="display: flex; gap: 4px; font-size: 1.1em; background: #f0f8ff; padding: 4px; border-radius: 4px; line-height: 1;">
+						<div style="flex: 1; border-right: 2px solid #0d47a1; padding-right: 4px;">
+							<div style="font-weight: 700; color: #0d47a1; text-align: center; margin-bottom: 1px;">RUNNER ON 1B</div>
+							<div style="margin: 0;"><span style="font-weight: 600;">D6:</span> ${runnerRoll}</div>
+							<div style="margin: 0;"><span style="font-weight: 600;">Speed:</span> ${runnerSpeed}</div>
+							<div style="font-weight: 700; color: #1565C0; border-top: 1px solid #0d47a1; margin-top: 1px; padding-top: 1px;">Total: ${runnerTotal}</div>
+						</div>
+						<div style="flex: 1; padding-left: 4px;">
+							<div style="font-weight: 700; color: #0d47a1; text-align: center; margin-bottom: 1px;">FIELDER</div>
+							<div style="margin: 0;"><span style="font-weight: 600;">D6:</span> ${fielderRoll}</div>
+							<div style="margin: 0;"><span style="font-weight: 600;">Arm:</span> ${fielderArm}</div>
+							<div style="font-weight: 700; color: #1565C0; border-top: 1px solid #0d47a1; margin-top: 1px; padding-top: 1px;">Total: ${fielderTotal}</div>
+						</div>
+					</div>
+					<div style="margin-top: 8px; padding: 8px; background: #e8f5e9; border-left: 4px solid #2e7d32; font-weight: 600; color: #2e7d32;">
+						OUT at Second - Attempting second throw to first...
+					</div>
+				`;
+				
+				createTab('throw', 'THROW 1', firstThrowContent, true);
+				
+				// Show second throw button
+				let throwButton = document.getElementById('throwButton');
+				if (!throwButton) {
+					throwButton = document.createElement('button');
+					throwButton.id = 'throwButton';
+					throwButton.className = 'timeline-btn';
+					throwButton.textContent = 'Second Throw';
+					throwButton.addEventListener('click', throwAttempt);
+					document.getElementById('timeline-buttons').appendChild(throwButton);
+				}
+				throwButton.disabled = false;
+				throwButton.textContent = 'Second Throw';
+				updateBasesDisplay();
+				updateScoreDisplay();
+				
+				// Move the flash highlight from 2B to 1B for the second throw
+				stopFlashBase();
+				flashBase('1b');
+				
+				return; // Exit here, second throw will be called separately
+			} else {
+				result = `SAFE at SECOND - Runner reaches second base`;
+				dpResult = { firstThrow: true, isOut: false };
+				
+				// Runner is safe at second, so double play fails
+				runners['2b'] = runners['1b'];
+				runners['1b'] = batter.name;
+				
+				updateOutcomeDisplay('SAFE - DOUBLE PLAY AVERTED');
+				doublePlayAttempt = null;
+			}
+		} else if (doublePlayAttempt && doublePlayAttempt.phase === 'toFirstDP') {
+			// Second throw of DP attempt
+			if (isOut) {
+				result = `OUT at FIRST - DOUBLE PLAY!`;
+				dpResult = { secondThrow: true, isOut: true };
+				
+				// Both runners are out - the one who was on first is already out (we removed from runners['1b'])
+				// and now the batter is out
+				runners['1b'] = null;
+				outs += 2;
+				updateOutsDisplay();
+				updateNextBatterButton();
+				updateOutcomeDisplay('DOUBLE PLAY!');
+			} else {
+				result = `SAFE at FIRST - Batter reaches first`;
+				dpResult = { secondThrow: true, isOut: false };
+				
+				// Batter is safe at first
+				runners['1b'] = batter.name;
+				// Runner who was on first is already out, so just 1 out
+				outs++;
+				updateOutsDisplay();
+				updateNextBatterButton();
+				updateOutcomeDisplay('SAFE - ONE OUT, DOUBLE PLAY FAILS');
+			}
+			doublePlayAttempt = null;
+		} else {
+			// Regular single throw to first base
+			if (isOut) {
+				result = 'OUT - Thrown out at first base';
+				// Batter is out
+				runners['1b'] = null;
+				outs++;
+				updateOutsDisplay();
+				updateNextBatterButton();
+				updateOutcomeDisplay('OUT - THROWN OUT');
+			} else {
+				result = 'SAFE - Runner reaches first base';
+				runners['1b'] = batter.name;
+				updateOutcomeDisplay('SAFE - RUNNER REACHES');
+			}
+		}
+		
+		updateBasesDisplay();
+		updateScoreDisplay();
+		
+		// Create tab content for throw attempt with side-by-side layout
+		const tabContent = `
+			<div style="display: flex; gap: 4px; font-size: 1.1em; background: #f0f8ff; padding: 4px; border-radius: 4px; line-height: 1;">
+				<div style="flex: 1; border-right: 2px solid #0d47a1; padding-right: 4px;">
+					<div style="font-weight: 700; color: #0d47a1; text-align: center; margin-bottom: 1px;">RUNNER</div>
+					<div style="margin: 0;"><span style="font-weight: 600;">D6:</span> ${runnerRoll}</div>
+					<div style="margin: 0;"><span style="font-weight: 600;">Speed:</span> ${runnerSpeed}</div>
+					<div style="font-weight: 700; color: #1565C0; border-top: 1px solid #0d47a1; margin-top: 1px; padding-top: 1px;">Total: ${runnerTotal}</div>
+				</div>
+				<div style="flex: 1; padding-left: 4px;">
+					<div style="font-weight: 700; color: #0d47a1; text-align: center; margin-bottom: 1px;">FIELDER</div>
+					<div style="margin: 0;"><span style="font-weight: 600;">D6:</span> ${fielderRoll}</div>
+					<div style="margin: 0;"><span style="font-weight: 600;">Arm:</span> ${fielderArm}${doublePlayAttempt && doublePlayAttempt.phase === 'toFirstDP' ? ' (-1 DP debuff)' : ''}</div>
+					<div style="font-weight: 700; color: #1565C0; border-top: 1px solid #0d47a1; margin-top: 1px; padding-top: 1px;">Total: ${fielderTotal}</div>
+				</div>
+			</div>
+		`;
+		createTab('throw', 'THROW', tabContent, true);
+		
+		// Stop the base flash now that throw is complete
+		stopFlashBase();
+	}
+
 	function startBatterResponse() {
 		const batter = teamsData[battingTeamIndex].players[currentBatterIndex];
 		const pitcher = teamsData[pitchingTeamIndex].players[currentPitcherIndex];
-		const roll = Math.floor(Math.random() * 12) + 1;
+		const roll = getRandomRoll(12, 'Batter Response Die');
 		
 		// Special rule: Nat 1 is always strikeout swinging
 		if (roll === 1) {
 			// Update outcome display above zone
-			document.getElementById('outcome-line1').textContent = 'SO Swinging';
-			document.getElementById('outcome-line2').textContent = 'Strikeout';
-			document.getElementById('outcome-line3').textContent = 'OUT';
+			updateOutcomeDisplay('STRIKEOUT SWINGING - OUT');
 			
 			// Create tab for result
-			let brChart = `${createTableHeader()}${createTableRow(roll, 'D12 (Nat 1)')}${createTableRow('SO Swinging', 'Result')}${closeTable()}`;
+			let brChart = `${createTableHeader()}${createTableRow(roll, 'D12 Roll (Natural 1)')}${closeTable()}`;
 			createTab('br', 'BR', brChart, true);
 			
 			// Increment outs
 			outs++;
 			updateOutsDisplay();
 			updateNextBatterButton();
+			const batter = teamsData[battingTeamIndex].players[currentBatterIndex];
+			logPlay(teamsData[battingTeamIndex].name, batter.name, 'strikes out swinging');
 			
 			// Disable the batter response button after it's been clicked
 			document.getElementById('batterResponseButton').disabled = true;
@@ -965,7 +1674,7 @@
 			outcome = "SO Swinging";
 			parentOutcome = "Strikeout";
 		} else if (total <= 5) {
-			outcome = "Dribbler*";
+			outcome = "Dribbler";
 			parentOutcome = "Ground Ball";
 		} else if (total === 6) {
 			outcome = "Can of Corn";
@@ -996,24 +1705,24 @@
 		// Store outcome and show Determine Fielder button if ball is in play (4-11)
 		brOutcome = outcome;
 		
-		// Update outcome display above zone
-		document.getElementById('outcome-line1').textContent = outcome;
-		document.getElementById('outcome-line2').textContent = parentOutcome;
-		
-		// Determine play type for line3
+		// Determine play type for display summary
 		let brPlayType = '';
 		if (total >= 12) {
-			brPlayType = '+4 BASES';
+			brPlayType = 'HOME RUN';
+			updateOutcomeDisplay(`${outcome} - ${brPlayType}`);
 		} else if (total <= 3) {
 			brPlayType = 'OUT';
+			updateOutcomeDisplay(`${outcome} - ${brPlayType}`);
 			// Increment outs for strikeout
 			outs++;
 			updateOutsDisplay();
 			updateNextBatterButton();
+			const batter = teamsData[battingTeamIndex].players[currentBatterIndex];
+			logPlay(teamsData[battingTeamIndex].name, batter.name, 'strikes out swinging');
 		} else if (total >= 4 && total <= 11) {
-			brPlayType = 'IN-PLAY';
+			brPlayType = 'IN PLAY';
+			updateOutcomeDisplay(`${outcome} - ${brPlayType}`);
 		}
-		document.getElementById('outcome-line3').textContent = brPlayType;
 		
 		if (total >= 4 && total <= 11) {
 			document.getElementById('determineFielderButton').disabled = false;
@@ -1027,25 +1736,27 @@
 			advanceRunnersMultipleBases(4);
 			updateBasesDisplay();
 			updateScoreDisplay();
+			const batter = teamsData[battingTeamIndex].players[currentBatterIndex];
+			logPlay(teamsData[battingTeamIndex].name, batter.name, 'hits a HOME RUN!');
 		}
 		
 		// Disable the batter response button after it's been clicked
 		document.getElementById('batterResponseButton').disabled = true;
 		
 		// Update tab for Batter Response
-		let brChart = `${createTableHeader()}${createTableRow(roll, 'D12')}${createTableRow(-pitcher.velocity, "Pitcher's Velocity Stat")}${createTableRow('+' + batter.contact, "Batter's Contact Stat")}`;
+		let brChart = `${createTableHeader()}${createTableRow(roll, 'D12 Roll')}${createTableRow(pitcher.velocity, "Pitcher's Velocity Stat")}${createTableRow(batter.contact, "Batter's Contact Stat")}`;
 		
 		if (pdModifier === 1) {
-			brChart += `${createTableRow('+1', 'Down the Middle Mod')}`;
+			brChart += `${createTableRow('+1', 'Down the Middle Bonus')}`;
 		} else if (pdModifier === -1) {
-			brChart += `${createTableRow('-1', 'Painted Mod')}`;
+			brChart += `${createTableRow('-1', 'Painted Penalty')}`;
 		}
 		
 		if (subtotal >= 9) {
-			brChart += `${createTableRow('+' + batter.power, "Batter's Power Stat")}`;
+			brChart += `${createTableRow(batter.power, "Batter's Power Stat")}`;
 		}
 		
-		brChart += `${createTableRow(total, 'Total Result', true)}${createTableRow('', outcome)}${createTableRow('', parentOutcome)}${closeTable()}`;
+		brChart += `${createTableRow(total, 'Total Result', true)}${closeTable()}`;
 		createTab('br', 'BR', brChart, true);
 	}
 
@@ -1056,7 +1767,7 @@
 		}
 		const pitcher = teamsData[pitchingTeamIndex].players[currentPitcherIndex];
 		const batter = teamsData[battingTeamIndex].players[currentBatterIndex];
-		const roll = Math.floor(Math.random() * 20) + 1;
+		const roll = getRandomRoll(20, 'Pitcher Delivery Die');
 		const modifier = pitcher.control - batter.eye;
 		const total = roll + modifier;
 		let outcome;
@@ -1185,6 +1896,7 @@
 				// Runners on base: advance them and allow another pitch
 				advanceRunners();
 				updateBasesDisplay();
+				populateRostersForTeams();
 				updateScoreDisplay();
 				// Re-enable pitcher delivery button to pitch again (only case where this happens)
 				document.getElementById('startButton').disabled = false;
@@ -1192,6 +1904,7 @@
 				// No runners: it's a walk
 				addRunnerToBase('1b');
 				updateBasesDisplay();
+				populateRostersForTeams();
 			}
 		} else if (outcome === 'Ball' || outcome === 'BB') {
 			// Walk: advance runners only if forced (existing baserunners advance only if there are runners behind them)
@@ -1200,25 +1913,28 @@
 			}
 			addRunnerToBase('1b');
 			updateBasesDisplay();
+			populateRostersForTeams();
 			updateScoreDisplay();
+			const batter = teamsData[battingTeamIndex].players[currentBatterIndex];
+			logPlay(teamsData[battingTeamIndex].name, batter.name, 'walks');
 		}
 		
 		// Display outcome lines above zone
-		document.getElementById('outcome-line1').textContent = line1;
-		document.getElementById('outcome-line2').textContent = line2;
-		
-		// Determine play type for line3
-		let playType = '';
+		let outcomeSummary = '';
 		if (outcome === 'Wild Pitch') {
-			playType = 'NEXT PITCH';
+			outcomeSummary = (runners['2b'] !== null || runners['3b'] !== null) ? 'WILD PITCH - NEXT PITCH' : 'WILD PITCH - NEXT BATTER';
 		} else if (outcome === 'Ball' || outcome === 'BB') {
-			playType = 'WALK';
+			outcomeSummary = 'WALK';
 		} else if (outcome === 'Strikeout Looking') {
-			playType = 'OUT';
-		} else {
-			playType = 'IN-PLAY';
+			outcomeSummary = 'STRIKEOUT LOOKING - OUT';
+		} else if (outcome === 'Down the Middle (+1 to BR)') {
+			outcomeSummary = 'DOWN THE MIDDLE - IN PLAY';
+		} else if (outcome === 'On the Plate') {
+			outcomeSummary = 'ON THE PLATE - IN PLAY';
+		} else if (outcome === 'Paint (-1 to BR)') {
+			outcomeSummary = 'PAINTED - IN PLAY';
 		}
-		document.getElementById('outcome-line3').textContent = playType;
+		updateOutcomeDisplay(outcomeSummary);
 
 		if (total >= 5 && total <= 19) {
 			document.getElementById('batterResponseButton').disabled = false;
@@ -1232,6 +1948,8 @@
 			updateOutsDisplay();
 			updateNextBatterButton();
 			document.getElementById('batterResponseButton').disabled = true;
+			const batter = teamsData[battingTeamIndex].players[currentBatterIndex];
+			logPlay(teamsData[battingTeamIndex].name, batter.name, 'strikes out looking');
 		}
 		
 		// Disable the start button after it's been clicked, unless it's a wild pitch with runners
@@ -1241,12 +1959,19 @@
 		}
 		
 		// Update tab for Pitcher Delivery
-		const pdChart = `${createTableHeader()}${createTableRow(roll, 'Pitcher Delivery D20 Roll')}${createTableRow(-batter.eye, "Batter's Eye Stat")}${createTableRow('+' + pitcher.control, "Pitcher's Control Stat")}${createTableRow(total, 'Total Result', true)}${createTableRow('', outcome)}${closeTable()}`;
+		const pdChart = `${createTableHeader()}${createTableRow(roll, 'Pitcher Delivery D20 Roll')}${createTableRow(batter.eye, "Batter's Eye Stat")}${createTableRow(pitcher.control, "Pitcher's Control Stat")}${createTableRow(total, 'Total Result', true)}${closeTable()}`;
 		createTab('pd', 'PD', pdChart, true);
 	}
 
     // attach event listeners after DOM is loaded
 	document.addEventListener('DOMContentLoaded', function () {
+		// Ensure manual rolls starts disabled
+		const manualSwitch = document.getElementById('manualRollSwitch');
+		if (manualSwitch) {
+			manualSwitch.checked = false;
+			useManualRolls = false;
+		}
+		
 		// Default data
 		teamsData = [
 			{
@@ -1320,6 +2045,7 @@
 		document.getElementById('batterResponseButton').addEventListener('click', startBatterResponse);
 		document.getElementById('determineFielderButton').addEventListener('click', determineFielder);
 		document.getElementById('handleCheckButton').addEventListener('click', handleCheck);
+		document.getElementById('tagUpButton').addEventListener('click', tagUp);
 		document.getElementById('nextBatterButton').addEventListener('click', nextBatter);
 		document.getElementById('manualRollSwitch').addEventListener('change', function() {
 			useManualRolls = this.checked;

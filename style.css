@@ -4,6 +4,96 @@
   box-sizing: border-box;
 }
 
+/* Flash animation for throw target base - animate border */
+@keyframes flashBase {
+  0% {
+    border-width: 4px;
+    border-color: #FFD700;
+    box-shadow: 0 0 20px #FFD700 !important;
+  }
+  50% {
+    border-width: 4px;
+    border-color: #FFD700;
+    box-shadow: 0 0 20px #FFD700 !important;
+  }
+  100% {
+    border-width: 4px;
+    border-color: #FFD700;
+    box-shadow: 0 0 20px #FFD700 !important;
+  }
+}
+
+.base-flash {
+  border-width: 4px !important;
+  border-color: #FFD700 !important;
+  box-shadow: 0 0 20px #FFD700 !important;
+  animation: flashBase 0.8s ease-in-out infinite !important;
+}
+
+/* Runner movement animation */
+@keyframes runnerMoving {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(255, 255, 255, 0.8);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.1);
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(255, 255, 255, 0.8);
+  }
+}
+
+.base-runner.running {
+  animation: runnerMoving 0.8s ease-in-out 1;
+}
+
+/* Arrow indicator pointing to next base */
+@keyframes arrowPulse {
+  0%, 100% {
+    opacity: 0.6;
+    transform: translateX(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(4px);
+  }
+}
+
+.base-runner::after {
+  content: '';
+  position: absolute;
+  right: -24px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 2px;
+  background: linear-gradient(to right, #FFD700, transparent);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.base-runner.running::after {
+  content: '→';
+  width: auto;
+  height: auto;
+  background: none;
+  font-size: 1.2em;
+  color: #FFD700;
+  font-weight: bold;
+  opacity: 1;
+  animation: arrowPulse 0.6s ease-in-out infinite;
+}
+
+.base-runner.running {
+  position: relative;
+}
+
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
@@ -13,10 +103,24 @@ body {
 
 #main-layout {
   display: flex;
-  gap: 16px;
+  gap: 8px;
   max-width: 1400px;
   margin: 0 auto;
   align-items: flex-start;
+}
+
+#left-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+#right-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 0 0 auto;
 }
 
 #simulation-container {
@@ -55,13 +159,12 @@ body {
 }
 
 .roster-panel {
-  flex: 0 0 250px;
+  flex: 0 0 auto;
   background: white;
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   padding: 16px;
-  max-height: 900px;
-  overflow-y: auto;
+  overflow: visible;
 }
 
 .roster-panel h3 {
@@ -70,6 +173,64 @@ body {
   font-size: 1.1em;
   border-bottom: 2px solid #2a5298;
   padding-bottom: 8px;
+}
+
+.play-log-panel {
+  flex: 0 0 180px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  padding: 12px;
+  max-height: 900px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.play-log-panel h3 {
+  color: #333;
+  margin-bottom: 8px;
+  font-size: 0.95em;
+  border-bottom: 2px solid #2a5298;
+  padding-bottom: 6px;
+  flex-shrink: 0;
+}
+
+.play-log-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.play-log-entry {
+  padding: 8px;
+  background: #f9f9f9;
+  border-left: 3px solid #2a5298;
+  border-radius: 4px;
+  font-size: 0.8em;
+  color: #333;
+  line-height: 1.3;
+  animation: slideInLeft 0.3s ease-out;
+}
+
+.play-log-entry.inning-start {
+  background: #e3f2fd;
+  border-left-color: #1565c0;
+  font-weight: 600;
+  color: #1565c0;
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .roster-list {
@@ -135,9 +296,9 @@ body {
 }
 
 .team-nine-lives .roster-item.selected {
-  background: #FBC02D;
-  color: #333;
-  border-left-color: #f57f17;
+  background: #009688;
+  color: white;
+  border-left-color: #00695c;
 }
 
 .roster-item.fielding-highlight-yellow {
@@ -262,23 +423,48 @@ body {
 }
 
 .team-nine-lives {
-  background: #fffde7;
-  border-left-color: #FBC02D;
-  border-top: 3px solid #FBC02D;
+  background: #e0f2f1;
+  border-left-color: #009688;
+  border-top: 3px solid #009688;
 }
 
 .team-nine-lives h3 {
-  border-bottom: 2px solid #FBC02D;
+  border-bottom: 2px solid #009688;
 }
 
 .team-nine-lives .roster-item {
-  border-left-color: #FBC02D;
+  border-left-color: #009688;
   background: white;
 }
 
 .team-nine-lives .roster-item:hover {
   background: #f5f5f5;
-  border-left-color: #f57f17;
+  border-left-color: #00695c;
+}
+
+/* Baserunner color classes - light shade of team color */
+.roster-item.baserunner-rat-stack {
+  background: #f3e5f5 !important;
+  border-left-color: #9C27B0 !important;
+  font-weight: 600;
+}
+
+.roster-item.baserunner-content-kings {
+  background: #e3f2fd !important;
+  border-left-color: #2196F3 !important;
+  font-weight: 600;
+}
+
+.roster-item.baserunner-straw-hats {
+  background: #ffe0b2 !important;
+  border-left-color: #e65100 !important;
+  font-weight: 600;
+}
+
+.roster-item.baserunner-nine-lives {
+  background: #e0f2f1 !important;
+  border-left-color: #009688 !important;
+  font-weight: 600;
 }
 
 h2 {
@@ -380,11 +566,6 @@ select:focus {
 }
 
 #tabs-box {
-  position: fixed;
-  right: 20px;
-  top: 100px;
-  width: 320px;
-  max-height: 70vh;
   background: white;
   border: 2px solid #ddd;
   border-radius: 8px;
@@ -399,7 +580,7 @@ select:focus {
   margin: 0;
   padding: 12px;
   color: #0d47a1;
-  font-size: 1em;
+  font-size: 1.1em;
   font-weight: 700;
   border-bottom: 2px solid #ddd;
   flex-shrink: 0;
@@ -417,7 +598,7 @@ select:focus {
   flex: 1;
   padding: 12px;
   overflow-y: auto;
-  font-size: 0.85em;
+  font-size: 1.05em;
 }
 
 #zone-and-bases {
@@ -539,7 +720,7 @@ select:focus {
 .data-table thead th {
   background-color: #0d47a1;
   color: white;
-  padding: 10px;
+  padding: 6px 8px;
   text-align: left;
   font-weight: 700;
   font-size: 0.9em;
@@ -554,7 +735,7 @@ select:focus {
 }
 
 .data-table tbody td {
-  padding: 8px 10px;
+  padding: 4px 6px;
   border-bottom: 1px solid #e0e0e0;
   font-size: 0.9em;
 }
@@ -562,13 +743,20 @@ select:focus {
 .data-table tbody td:first-child {
   font-weight: 700;
   color: #0d47a1;
-  width: 50%;
+  width: 75%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .data-table tbody td:last-child {
   color: #1565C0;
   white-space: nowrap;
-  width: 50%;
+  width: 30%;
+}
+
+#tabs-content .data-table tbody td:last-child {
+  font-size: 1.1em;
 }
 
 .data-table tbody tr:last-child td {
@@ -833,6 +1021,7 @@ p {
 
 #bases-display {
   display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 
@@ -842,12 +1031,23 @@ p {
   flex: 1;
 }
 
+.base-row.home-row {
+  justify-content: center;
+  margin-top: 12px;
+  flex: none;
+}
+
 .base-container {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 4px;
   align-items: center;
+}
+
+.base-container.home-base {
+  flex: none;
+  width: auto;
 }
 
 .base-container:nth-child(2) {
@@ -899,9 +1099,9 @@ p {
 }
 
 .base-runner.occupied.team-nine-lives {
-  background: #FBC02D;
-  border-color: #f57f17;
-  color: #333;
+  background: #009688;
+  border-color: #00695c;
+  color: white;
 }
 
 #right-sidebar {
@@ -1035,39 +1235,35 @@ p {
 }
 
 #outcome-display {
-  min-height: 44px;
+  min-height: 32px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: 2px;
+  gap: 0;
 }
 
 #outcome-line1 {
-  font-size: 1.1em;
+  font-size: 1.35em;
   font-weight: 700;
   color: #2a5298;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   text-align: center;
+  line-height: 1.3;
 }
 
 #outcome-line2 {
-  font-size: 0.85em;
-  font-weight: 600;
-  color: #555;
-  min-height: 16px;
+  font-size: 0.8em;
+  font-weight: 500;
+  color: #666;
   text-align: center;
+  display: none;
+  margin-top: 2px;
 }
 
 #outcome-line3 {
-  font-size: 0.8em;
-  color: #9e9e9e;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 8px;
-  text-align: center;
+  display: none;
 }
 
 .zone-border {

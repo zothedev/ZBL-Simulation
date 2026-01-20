@@ -10,17 +10,24 @@
 </head>
 <body>
     <div id="main-layout">
-        <div id="left-roster" class="roster-panel">
-            <h3>Pitching Team</h3>
-            <select id="pitchingTeamSelect" placeholder="Select Team" style="width: 100%; margin-bottom: 12px;">
-                <option value="" disabled selected>Select a team</option>
-                <option value="0">Rat Stack</option>
-                <option value="1">Content Kings</option>
-                <option value="2">Nine-Lives Nine</option>
-                <option value="3">Straw Hat Pirates</option>
-            </select>
-            <select id="pitcherSelect" placeholder="Select Pitcher" style="width: 100%; margin-bottom: 12px;"></select>
-            <div id="left-roster-list" class="roster-list"></div>
+        <div id="left-column">
+            <div id="left-roster" class="roster-panel">
+                <h3>Pitching Team</h3>
+                <select id="pitchingTeamSelect" placeholder="Select Team" style="width: 100%; margin-bottom: 12px;">
+                    <option value="" disabled selected>Select a team</option>
+                    <option value="0">Rat Stack</option>
+                    <option value="1">Content Kings</option>
+                    <option value="2">Nine-Lives Nine</option>
+                    <option value="3">Straw Hat Pirates</option>
+                </select>
+                <select id="pitcherSelect" placeholder="Select Pitcher" style="width: 100%; margin-bottom: 12px;"></select>
+                <div id="left-roster-list" class="roster-list"></div>
+            </div>
+            
+            <div id="play-log" class="play-log-panel">
+                <h3>Play Log</h3>
+                <div id="play-log-entries" class="play-log-entries"></div>
+            </div>
         </div>
         
         <div id="simulation-container">
@@ -118,6 +125,12 @@
                                     <div class="base-runner" id="runner-1b">-</div>
                                 </div>
                             </div>
+                            <div class="base-row home-row">
+                                <div class="base-container home-base">
+                                    <div class="base-label">Home</div>
+                                    <div class="base-runner" id="runner-home">-</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -126,28 +139,31 @@
                         <button id="batterResponseButton" class="timeline-btn" disabled>Batter Response</button>
                         <button id="determineFielderButton" class="timeline-btn" disabled>Fielder Determination</button>
                         <button id="handleCheckButton" class="timeline-btn" disabled>Handle Check</button>
+                        <button id="tagUpButton" class="timeline-btn" disabled style="display: none;">Tag Up</button>
                     </div>
                 </div>
             </div>
         </div>
         
-        <div id="right-roster" class="roster-panel">
-            <h3>Batting Team</h3>
-            <select id="battingTeamSelect" placeholder="Select Team" style="width: 100%; margin-bottom: 12px;">
-                <option value="" disabled selected>Select a team</option>
-                <option value="0">Rat Stack</option>
-                <option value="1">Content Kings</option>
-                <option value="2">Nine-Lives Nine</option>
-                <option value="3">Straw Hat Pirates</option>
-            </select>
-            <select id="batterSelect" placeholder="Select Batter" style="width: 100%; margin-bottom: 12px;"></select>
-            <div id="right-roster-list" class="roster-list"></div>
-        </div>
-        
-        <div id="tabs-box">
+        <div id="right-column">
+            <div id="right-roster" class="roster-panel">
+                <h3>Batting Team</h3>
+                <select id="battingTeamSelect" placeholder="Select Team" style="width: 100%; margin-bottom: 12px;">
+                    <option value="" disabled selected>Select a team</option>
+                    <option value="0">Rat Stack</option>
+                    <option value="1">Content Kings</option>
+                    <option value="2">Nine-Lives Nine</option>
+                    <option value="3">Straw Hat Pirates</option>
+                </select>
+                <select id="batterSelect" placeholder="Select Batter" style="width: 100%; margin-bottom: 12px;"></select>
+                <div id="right-roster-list" class="roster-list"></div>
+            </div>
+            
+            <div id="tabs-box">
             <h4 id="tabs-title">Result Info</h4>
             <div id="tabs-header"></div>
             <div id="tabs-content"></div>
+        </div>
         </div>
     </div>
 </body>
