@@ -44,14 +44,6 @@
             <div id="zone-display" style="display:none;">
                 <div id="zone-header">
                     <h3>At The Plate</h3>
-                    <div id="inning-display">
-                        <span id="inning-text">Top 1st</span>
-                    </div>
-                    <div id="outs-display">
-                        <span id="outs-label">Outs:</span>
-                        <span id="outs-count">0</span>
-                    </div>
-                    <button id="nextBatterButton" class="zone-header-btn">Next Batter</button>
                     <div id="score-display">
                         <div class="team-score">
                             <span class="team-name" id="pitching-team-name">-</span>
@@ -62,12 +54,20 @@
                             <span class="team-score-value" id="batting-team-score">0</span>
                         </div>
                     </div>
+                    <div id="inning-display">
+                        <span id="inning-text">Top 1st</span>
+                    </div>
+                    <div id="outs-display">
+                        <span id="outs-label">Outs:</span>
+                        <span id="outs-count">0</span>
+                    </div>
                 </div>
                 <div id="content-wrapper">
                     <div id="batter-pitcher-display">
                         <div class="player-section">
                             <div class="player-label">Pitcher</div>
                             <div id="pitcher-card" class="player-card">
+                                <img id="pitcher-image" class="player-card-image" src="https://via.placeholder.com/120" alt="Pitcher">
                                 <div id="pitcher-team-name" style="font-size: 0.85em; color: #666; margin-bottom: 4px;"></div>
                                 <h4 id="pitcher-name"></h4>
                                 <div class="stats-grid">
@@ -96,6 +96,7 @@
                         <div class="player-section">
                             <div class="player-label">Batter</div>
                             <div id="batter-card" class="player-card">
+                                <img id="batter-image" class="player-card-image" src="https://via.placeholder.com/120" alt="Batter">
                                 <div id="batter-team-name" style="font-size: 0.85em; color: #666; margin-bottom: 4px;"></div>
                                 <h4 id="batter-name"></h4>
                                 <div class="stats-grid">
@@ -141,6 +142,7 @@
                         <button id="handleCheckButton" class="timeline-btn" disabled>Handle Check</button>
                         <button id="tagUpButton" class="timeline-btn" disabled style="display: none;">Tag Up</button>
                     </div>
+                    <button id="nextBatterButton" class="zone-header-btn">Next Batter</button>
                 </div>
             </div>
         </div>

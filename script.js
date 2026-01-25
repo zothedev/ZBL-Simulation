@@ -158,16 +158,24 @@
 			3: 'team-straw-hats'        // Straw Hat Pirates - Red
 		};
 		
-		// Update home base with current batter
+		// Update home base with current batter - only if batter is not on a base
 		const homeElement = document.getElementById('runner-home');
 		if (homeElement && currentBatterIndex !== -1) {
 			const batter = teamsData[battingTeamIndex].players[currentBatterIndex];
-			homeElement.textContent = batter.name;
-			homeElement.classList.remove('team-rat-stack', 'team-content-kings', 'team-nine-lives', 'team-straw-hats', 'occupied');
-			homeElement.classList.add('occupied');
-			const teamColorClass = teamColorMap[battingTeamIndex];
-			if (teamColorClass) {
-				homeElement.classList.add(teamColorClass);
+			const batterOnBase = runners['1b'] === batter.name || runners['2b'] === batter.name || runners['3b'] === batter.name;
+			
+			if (!batterOnBase) {
+				homeElement.textContent = batter.name;
+				homeElement.classList.remove('team-rat-stack', 'team-content-kings', 'team-nine-lives', 'team-straw-hats', 'occupied');
+				homeElement.classList.add('occupied');
+				const teamColorClass = teamColorMap[battingTeamIndex];
+				if (teamColorClass) {
+					homeElement.classList.add(teamColorClass);
+				}
+			} else {
+				// Batter is on a base, clear home
+				homeElement.textContent = '-';
+				homeElement.classList.remove('team-rat-stack', 'team-content-kings', 'team-nine-lives', 'team-straw-hats', 'occupied');
 			}
 		}
 		
@@ -222,12 +230,26 @@
 		const battingTeamNameElem = document.getElementById('batting-team-name');
 		const pitchingScoreElem = document.getElementById('pitching-team-score');
 		const battingScoreElem = document.getElementById('batting-team-score');
+		
+		// Get the team score containers
+		const scoreDisplay = document.getElementById('score-display');
+		const scoreContainers = scoreDisplay ? scoreDisplay.querySelectorAll('.team-score') : [];
 
 		if (pitchingTeamNameElem && teamsData[pitchingTeamIndex]) {
 			pitchingTeamNameElem.textContent = teamsData[pitchingTeamIndex].name;
+			// Set background color for pitching team
+			if (scoreContainers[0]) {
+				scoreContainers[0].style.backgroundColor = teamsData[pitchingTeamIndex].players[0].bgColor;
+				scoreContainers[0].style.color = 'white';
+			}
 		}
 		if (battingTeamNameElem && teamsData[battingTeamIndex]) {
 			battingTeamNameElem.textContent = teamsData[battingTeamIndex].name;
+			// Set background color for batting team
+			if (scoreContainers[1]) {
+				scoreContainers[1].style.backgroundColor = teamsData[battingTeamIndex].players[0].bgColor;
+				scoreContainers[1].style.color = 'white';
+			}
 		}
 		if (pitchingScoreElem) {
 			pitchingScoreElem.textContent = teamScores.pitching;
@@ -293,13 +315,7 @@
 		updatePitcherSelect();
 		updateBatterSelect();
 		
-		// Auto-select the primary pitcher for the new pitching team
-		const team = teamsData[pitchingTeamIndex];
-		const primaryPitcher = team.players.findIndex(player => player.position === "P");
-		if (primaryPitcher !== -1) {
-			document.getElementById('pitcherSelect').value = primaryPitcher;
-			setCurrentPitcher(primaryPitcher);
-		}
+		// Keep the same pitcher from the previous half inning (don't auto-select a new one)
 		
 		// Auto-select the first batter for the new batting team
 		const battingTeam = teamsData[battingTeamIndex];
@@ -317,8 +333,8 @@
 		const team = teamsData[pitchingTeamIndex];
 		if (!team || !team.players) return;
 		
-		// Find the player with this position (prioritize primary position over secondary)
-		let fielder = team.players.find(p => p.position === fielderPosition);
+		// Find the player with this position (prioritize currentPosition over secondary)
+		let fielder = team.players.find(p => p.currentPosition === fielderPosition);
 		if (!fielder) {
 			fielder = team.players.find(p => p.secondaryPos === fielderPosition);
 		}
@@ -398,6 +414,15 @@
 	}
 
 	function populateTeamSelects() {
+		// Initialize currentPosition for all players if not already set
+		teamsData.forEach(team => {
+			team.players.forEach(player => {
+				if (!player.currentPosition) {
+					player.currentPosition = player.position;
+				}
+			});
+		});
+		
 		const pitchingTeamSelect = document.getElementById('pitchingTeamSelect');
 		const battingTeamSelect = document.getElementById('battingTeamSelect');
 		
@@ -451,9 +476,12 @@
 			updateOutsDisplay();
 			updateInningDisplay();
 			
-			// Auto-select the primary pitcher (position: "P")
+			// Auto-select the primary pitcher (position: "SP" or "P")
 			const team = teamsData[teamIndex];
-			const primaryPitcher = team.players.findIndex(player => player.position === "P");
+			let primaryPitcher = team.players.findIndex(player => player.position === "SP");
+			if (primaryPitcher === -1) {
+				primaryPitcher = team.players.findIndex(player => player.position === "P");
+			}
 			if (primaryPitcher !== -1) {
 				document.getElementById('pitcherSelect').value = primaryPitcher;
 				setCurrentPitcher(primaryPitcher);
@@ -482,6 +510,37 @@
 	}
 
 	function setCurrentPitcher(playerIndex) {
+		const team = teamsData[pitchingTeamIndex];
+		const newPitcher = team.players[playerIndex];
+		
+		// If the new pitcher is not a pitcher position, swap with whoever is currently the primary pitcher
+		const pitcherPositions = ['P', 'SP', 'RP', 'CP'];
+		if (!pitcherPositions.includes(newPitcher.position)) {
+			// Find the current primary pitcher (look for SP first, then P, then RP, then CP)
+			let primaryPitcher = team.players.find(p => p.position === 'SP');
+			if (!primaryPitcher) primaryPitcher = team.players.find(p => p.position === 'P');
+			if (!primaryPitcher) primaryPitcher = team.players.find(p => p.position === 'RP');
+			if (!primaryPitcher) primaryPitcher = team.players.find(p => p.position === 'CP');
+			
+			if (primaryPitcher) {
+				// Determine what role the new pitcher should take
+				// Use their secondaryPos if it's a pitcher role, otherwise use CP as default
+				let newPitcherRole = 'CP'; // Default role for relief pitchers
+				if (newPitcher.secondaryPos && pitcherPositions.includes(newPitcher.secondaryPos)) {
+					newPitcherRole = newPitcher.secondaryPos;
+				}
+				
+				// Save the new pitcher's original position
+				const newPitcherOriginalPos = newPitcher.position;
+				
+				// Swap positions
+				newPitcher.position = newPitcherRole;
+				newPitcher.currentPosition = newPitcherRole;
+				primaryPitcher.position = newPitcherOriginalPos;
+				primaryPitcher.currentPosition = newPitcherOriginalPos;
+			}
+		}
+		
 		currentPitcherIndex = parseInt(playerIndex);
 		populateRostersForTeams();
 		updateRosterHighlight();
@@ -567,9 +626,10 @@
 					}
 				}
 				rosterItem.innerHTML = `
+					<img class="roster-item-image" src="${player.picture}" alt="${player.name}" style="background-color: ${player.bgColor}; border-color: ${player.bgColor};" onerror="this.src='https://via.placeholder.com/40'">
 					<div class="roster-item-content">
 						<span class="roster-item-name">${player.name}</span>
-						<span class="roster-item-position">${player.position}</span>
+						<span class="roster-item-position">${player.currentPosition || player.position}</span>
 					</div>
 					${roleLabel}
 				`;
@@ -605,6 +665,7 @@
 					}
 				}
 				rosterItem.innerHTML = `
+					<img class="roster-item-image" src="${player.picture}" alt="${player.name}" style="background-color: ${player.bgColor}; border-color: ${player.bgColor};" onerror="this.src='https://via.placeholder.com/40'">
 					<div class="roster-item-content">
 						<span class="roster-item-name">${player.name}</span>
 						<span class="roster-item-position">${player.position}</span>
@@ -733,6 +794,8 @@
 		const battingTeamName = teamsData[battingTeamIndex].name;
 		
 		// Update pitcher card
+		document.getElementById('pitcher-image').src = pitcher.picture;
+		document.getElementById('pitcher-image').onerror = function() { this.src = 'https://via.placeholder.com/120'; };
 		document.getElementById('pitcher-team-name').textContent = pitchingTeamName;
 		document.getElementById('pitcher-name').textContent = pitcher.name;
 		document.getElementById('pitcher-control').textContent = pitcher.control;
@@ -741,6 +804,8 @@
 		document.getElementById('pitcher-arm').textContent = pitcher.arm;
 		
 		// Update batter card
+		document.getElementById('batter-image').src = batter.picture;
+		document.getElementById('batter-image').onerror = function() { this.src = 'https://via.placeholder.com/120'; };
 		document.getElementById('batter-team-name').textContent = battingTeamName;
 		document.getElementById('batter-name').textContent = batter.name;
 		document.getElementById('batter-contact').textContent = batter.contact;
@@ -894,7 +959,7 @@
 	}
 
 	function advanceRunnersMultipleBases(bases) {
-		// Advance runners by specified number of bases (1 for single, 4 for home run)
+		// Advance runners by specified number of bases (1 for single, 2 for double, 4 for home run)
 		// Track which runners score - score goes to batting team
 		const basesToAnimate = [];
 		
@@ -914,6 +979,21 @@
 			}
 			// Batter also scores on home run
 			teamScores.batting++;
+		} else if (bases === 2) {
+			// Double: advance by 2 bases
+			if (runners['3b']) {
+				teamScores.batting++;
+				runners['3b'] = null;
+			}
+			if (runners['2b']) {
+				teamScores.batting++;
+				runners['2b'] = null;
+			}
+			if (runners['1b']) {
+				runners['3b'] = runners['1b'];
+				runners['1b'] = null;
+				basesToAnimate.push('3b');
+			}
 		} else if (bases === 1) {
 			// Single: advance by 1 base
 			if (runners['3b']) {
@@ -1002,8 +1082,13 @@
 		let actualFielderName = fielderName; // Keep position name for display
 		
 		if (pitchingTeam && fielderCode) {
-			// Find the player at this fielding position
-			const fielder = pitchingTeam.players.find(p => p.position === fielderCode || p.secondaryPos === fielderCode);
+			// Find the player at this fielding position using currentPosition
+			// Prioritize currentPosition (which accounts for position swaps)
+			let fielder = pitchingTeam.players.find(p => p.currentPosition === fielderCode);
+			// If no currentPosition match, check secondary position
+			if (!fielder) {
+				fielder = pitchingTeam.players.find(p => p.secondaryPos === fielderCode);
+			}
 			if (fielder) {
 				gloveStat = fielder.glove;
 				armStat = fielder.arm;
@@ -1022,8 +1107,8 @@
 		// Create Fielder tab if content exists
 		if (tabContent) {
 			createTab('fielder', 'DF', tabContent, true);
-			// Highlight the fielder in the roster by position code
-			highlightFielder(fielderCode);
+			// Highlight the fielder in the roster by name
+			highlightFielderByName(actualFielderName);
 			// Show fielder info in outcome display
 			document.getElementById('outcome-line2').textContent = `${fielderName} attempting to field`;
 			document.getElementById('outcome-line2').style.display = 'block';
@@ -1144,6 +1229,14 @@
 			
 			tagTabContent += closeTable();
 			createTab('tag', 'TAG', tagTabContent, true);
+			
+			// Log tag-up results to play log
+			tagUpResults.forEach(info => {
+				if (info.throwResult && info.isOut) {
+					// Runner was thrown out during tag-up attempt
+					logPlay(teamsData[battingTeamIndex].name, info.runner, `thrown out at ${info.target === 'home' ? 'home' : '3rd'} trying to tag up`);
+				}
+			});
 		}
 		
 		updateBasesDisplay();
@@ -1174,8 +1267,8 @@
 		const fielderTotal = fielderRoll + fielderArm;
 		const runnerTotal = runnerRoll + runnerPlayer.speed;
 		
-		// Defense wins ties
-		const isOut = fielderTotal >= runnerTotal;
+		// Runner wins ties on tag-up attempts
+		const isOut = fielderTotal > runnerTotal;
 		
 		if (isOut) {
 			// Remove runner (they're out) and increment outs
@@ -1247,7 +1340,12 @@
 				updateNextBatterButton();
 				updateOutcomeDisplay('BATTER OUT - CAUGHT');
 				const batter = teamsData[battingTeamIndex].players[currentBatterIndex];
-				logPlay(teamsData[battingTeamIndex].name, batter.name, `is caught by ${fielderData.name}`);
+				// Determine out type based on brOutcome
+				let outType = 'flew out to';
+				if (brOutcome === 'Laser' || brOutcome === 'Bloop') {
+					outType = 'lined out to';
+				}
+				logPlay(teamsData[battingTeamIndex].name, batter.name, `${outType} ${fielderData.name}`);
 				
 				// Show tag-up button if there are runners on 2b or 3b
 				const tagUpButton = document.getElementById('tagUpButton');
@@ -1265,14 +1363,39 @@
 			}
 		} else {
 			result = 'Not Handled - Single, Runners advance 1 base';
-			// Advance existing runners one base, then add batter to 1B
-			advanceRunners();
-			addRunnerToBase('1b');
+			
+			// Check if it's a double (Laser or Screamer)
+			const isDouble = brOutcome === 'Laser' || brOutcome === 'Screamer*';
+			
+			if (isDouble) {
+				// Double: advance all runners 2 bases and batter to 2B
+				advanceRunnersMultipleBases(2);
+				runners['2b'] = teamsData[battingTeamIndex].players[currentBatterIndex].name;
+				result = 'Not Handled - Double, Runners advance 2 bases';
+			} else {
+				// Single: advance existing runners one base, then add batter to 1B
+				advanceRunners();
+				addRunnerToBase('1b');
+			}
+			
 			updateBasesDisplay();
 			populateRostersForTeams();
 			updateScoreDisplay();
 			const batter = teamsData[battingTeamIndex].players[currentBatterIndex];
-			logPlay(teamsData[battingTeamIndex].name, batter.name, `gets a hit to ${brOutcome.toLowerCase()}`);
+			
+			// Map outcome to hit description
+			let hitDescription = 'hits a single';
+			if (brOutcome === 'Laser') {
+				hitDescription = 'hits a laser double';
+			} else if (brOutcome === 'Bloop') {
+				hitDescription = 'hits a bloop single';
+			} else if (brOutcome === 'Dribbler') {
+				hitDescription = 'hits a dribbler';
+			} else if (brOutcome === 'Screamer*') {
+				hitDescription = 'hits a screamer double';
+			}
+			
+			logPlay(teamsData[battingTeamIndex].name, batter.name, hitDescription);
 			
 			// Hide tag-up button for non-catchable balls
 			const tagUpButton = document.getElementById('tagUpButton');
@@ -1744,7 +1867,9 @@
 		document.getElementById('batterResponseButton').disabled = true;
 		
 		// Update tab for Batter Response
-		let brChart = `${createTableHeader()}${createTableRow(roll, 'D12 Roll')}${createTableRow(pitcher.velocity, "Pitcher's Velocity Stat")}${createTableRow(batter.contact, "Batter's Contact Stat")}`;
+		const velocityMod = -pitcher.velocity;
+		const contactVal = batter.contact;
+		let brChart = `${createTableHeader()}${createTableRow(roll, 'D12 Roll')}${createTableRow(velocityMod < 0 ? `${velocityMod}` : `+${velocityMod}`, "Pitcher's Velocity (Subtracted)")}${createTableRow(contactVal >= 0 ? `+${contactVal}` : `${contactVal}`, "Batter's Contact Stat")}`;
 		
 		if (pdModifier === 1) {
 			brChart += `${createTableRow('+1', 'Down the Middle Bonus')}`;
@@ -1753,7 +1878,7 @@
 		}
 		
 		if (subtotal >= 9) {
-			brChart += `${createTableRow(batter.power, "Batter's Power Stat")}`;
+			brChart += `${createTableRow(`+${batter.power}`, "Batter's Power Stat")}`;
 		}
 		
 		brChart += `${createTableRow(total, 'Total Result', true)}${closeTable()}`;
@@ -1767,8 +1892,18 @@
 		}
 		const pitcher = teamsData[pitchingTeamIndex].players[currentPitcherIndex];
 		const batter = teamsData[battingTeamIndex].players[currentBatterIndex];
+		
+		// Subtract pitcher stamina by 1 for facing a batter
+		pitcher.stamina = Math.max(0, pitcher.stamina - 1);
+		
 		const roll = getRandomRoll(20, 'Pitcher Delivery Die');
-		const modifier = pitcher.control - batter.eye;
+		let modifier = pitcher.control - batter.eye;
+		
+		// Apply -3 modifier if pitcher is out of stamina
+		if (pitcher.stamina === 0) {
+			modifier -= 3;
+		}
+		
 		const total = roll + modifier;
 		let outcome;
 		if (total <= 2) outcome = "Wild Pitch";
@@ -1959,7 +2094,11 @@
 		}
 		
 		// Update tab for Pitcher Delivery
-		const pdChart = `${createTableHeader()}${createTableRow(roll, 'Pitcher Delivery D20 Roll')}${createTableRow(batter.eye, "Batter's Eye Stat")}${createTableRow(pitcher.control, "Pitcher's Control Stat")}${createTableRow(total, 'Total Result', true)}${closeTable()}`;
+		let staminaPenalty = 0;
+		if (pitcher.stamina === 0) {
+			staminaPenalty = -3;
+		}
+		const pdChart = `${createTableHeader()}${createTableRow(roll, 'Pitcher Delivery D20 Roll')}${createTableRow(-batter.eye, "Batter's Eye Stat")}${createTableRow(pitcher.control, "Pitcher's Control Stat")}${staminaPenalty !== 0 ? createTableRow(staminaPenalty, 'Stamina Exhaustion Penalty') : ''}${createTableRow(total, 'Total Result', true)}${closeTable()}`;
 		createTab('pd', 'PD', pdChart, true);
 	}
 
@@ -1977,57 +2116,57 @@
 			{
 				name: "Rat Stack",
 				players: [
-					{ battingOrder: 1, number: 16, name: "Donezo", position: "SS", secondaryPos: "P", contact: 2, power: 0, eye: 1, speed: 3, control: 2, velocity: 1, stamina: 8, arm: 2, glove: 1 },
-					{ battingOrder: 2, number: 2, name: "GBR", position: "P", secondaryPos: "INF", contact: 1, power: 2, eye: 1, speed: 1, control: 1, velocity: 3, stamina: 12, arm: 1, glove: 2 },
-					{ battingOrder: 3, number: 5, name: "EFive", position: "2B", secondaryPos: "", contact: 3, power: 2, eye: 0, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 1, glove: 1 },
-					{ battingOrder: 4, number: 67, name: "Girble", position: "C", secondaryPos: "", contact: 2, power: 1, eye: 2, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 1, glove: 0 },
-					{ battingOrder: 5, number: 8, name: "Cazanovi", position: "RF", secondaryPos: "", contact: 1, power: 0, eye: 1, speed: 1, control: 0, velocity: 0, stamina: 0, arm: 2, glove: 2 },
-					{ battingOrder: 6, number: 34, name: "Mira", position: "CF", secondaryPos: "", contact: 1, power: 1, eye: 0, speed: 2, control: 0, velocity: 0, stamina: 0, arm: 1, glove: 2 },
-					{ battingOrder: 7, number: 26, name: "Iron", position: "1B", secondaryPos: "", contact: 0, power: 2, eye: 2, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 1, glove: 1 },
-					{ battingOrder: 8, number: "", name: "Big Noey", position: "3B", secondaryPos: "P", contact: 1, power: 1, eye: 3, speed: 1, control: 2, velocity: 1, stamina: 8, arm: 1, glove: 1 },
-					{ battingOrder: 9, number: 9, name: "Osaj", position: "LF", secondaryPos: "", contact: 0, power: 3, eye: 0, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 3, glove: 1 }
+					{ battingOrder: 1, number: 16, name: "Donezo", position: "SS", secondaryPos: "P", contact: 2, power: 0, eye: 1, speed: 3, control: 2, velocity: 2, stamina: 10, arm: 2, glove: 1, picture: "pfps/Rat Stack/doneZo.webp", bgColor: "#9C27B0" },
+					{ battingOrder: 2, number: 2, name: "GBR", position: "P", secondaryPos: "INF", contact: 1, power: 2, eye: 1, speed: 1, control: 1, velocity: 3, stamina: 25, arm: 1, glove: 2, picture: "pfps/Rat Stack/gbr.webp", bgColor: "#9C27B0" },
+					{ battingOrder: 3, number: 5, name: "EFive", position: "2B", secondaryPos: "", contact: 2, power: 2, eye: 0, speed: 1, control: 0, velocity: 0, stamina: 0, arm: 1, glove: 1, picture: "pfps/Rat Stack/efive.png", bgColor: "#9C27B0" },
+					{ battingOrder: 4, number: 67, name: "Girble", position: "C", secondaryPos: "", contact: 2, power: 1, eye: 2, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 1, glove: 0, picture: "pfps/Rat Stack/girble.webp", bgColor: "#9C27B0" },
+					{ battingOrder: 5, number: 8, name: "Cazanovi", position: "RF", secondaryPos: "", contact: 1, power: 0, eye: 1, speed: 1, control: 0, velocity: 0, stamina: 0, arm: 2, glove: 2, picture: "pfps/Rat Stack/cazanovi.webp", bgColor: "#9C27B0" },
+					{ battingOrder: 6, number: 34, name: "Mira", position: "CF", secondaryPos: "", contact: 1, power: 1, eye: 0, speed: 2, control: 0, velocity: 0, stamina: 0, arm: 1, glove: 2, picture: "pfps/Rat Stack/mira.webp", bgColor: "#9C27B0" },
+					{ battingOrder: 7, number: 26, name: "Iron", position: "1B", secondaryPos: "", contact: 0, power: 2, eye: 2, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 1, glove: 1, picture: "pfps/Rat Stack/iron.webp", bgColor: "#9C27B0" },
+					{ battingOrder: 8, number: 7, name: "Big Noey", position: "3B", secondaryPos: "P", contact: 1, power: 1, eye: 3, speed: 1, control: 2, velocity: 3, stamina: 6, arm: 1, glove: 1, picture: "pfps/Rat Stack/bignoey.png", bgColor: "#9C27B0" },
+					{ battingOrder: 9, number: 9, name: "Osaj", position: "LF", secondaryPos: "", contact: 0, power: 3, eye: 0, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 3, glove: 1, picture: "pfps/Rat Stack/osaj.webp", bgColor: "#9C27B0" }
 				]
 			},
 			{
 				name: "Content Kings",
 				players: [
-					{ battingOrder: 1, number: 0, name: "Super", position: "CF", secondaryPos: "", contact: 1, power: 0, eye: 0, speed: 3, control: 0, velocity: 0, stamina: 0, arm: 1, glove: 2 },
-					{ battingOrder: 2, number: 0, name: "Frost", position: "3B", secondaryPos: "", contact: 1, power: 1, eye: 1, speed: 1, control: 0, velocity: 0, stamina: 0, arm: 0, glove: 2 },
-					{ battingOrder: 3, number: 3, name: "Griffin", position: "P", secondaryPos: "", contact: 0, power: 2, eye: 1, speed: 1, control: 1, velocity: 3, stamina: 12, arm: 2, glove: 1 },
-					{ battingOrder: 4, number: 33, name: "Lion", position: "SS", secondaryPos: "P", contact: 1, power: 1, eye: 2, speed: 0, control: 2, velocity: 2, stamina: 6, arm: 1, glove: 2 },
-					{ battingOrder: 5, number: 1, name: "Justin", position: "RF", secondaryPos: "", contact: 0, power: 3, eye: 0, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 3, glove: 0 },
-					{ battingOrder: 6, number: 2, name: "Travis", position: "LF", secondaryPos: "", contact: 1, power: 2, eye: 0, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 3, glove: 0 },
-					{ battingOrder: 7, number: 0, name: "Aspen", position: "1B", secondaryPos: "P", contact: 2, power: 1, eye: 0, speed: 1, control: 3, velocity: 1, stamina: 12, arm: 1, glove: 2 },
-					{ battingOrder: 8, number: 0, name: "Bailey", position: "2B", secondaryPos: "", contact: 0, power: 1, eye: 2, speed: 1, control: 0, velocity: 0, stamina: 0, arm: 2, glove: 2 },
-					{ battingOrder: 9, number: 0, name: "Rose", position: "C", secondaryPos: "", contact: 0, power: 1, eye: 3, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 1, glove: 1 }
+					{ battingOrder: 1, number: 18, name: "Super", position: "CF", secondaryPos: "", contact: 1, power: 0, eye: 0, speed: 3, control: 0, velocity: 0, stamina: 0, arm: 1, glove: 2, picture: "pfps/kings/super.png", bgColor: "#64B5F6" },
+					{ battingOrder: 2, number: 9, name: "Frost", position: "3B", secondaryPos: "", contact: 2, power: 1, eye: 1, speed: 1, control: 0, velocity: 0, stamina: 0, arm: 0, glove: 2, picture: "pfps/kings/frost.png", bgColor: "#64B5F6" },
+					{ battingOrder: 3, number: 3, name: "Griffin", position: "SP", secondaryPos: "INF", contact: 0, power: 2, eye: 1, speed: 1, control: 1, velocity: 3, stamina: 25, arm: 2, glove: 1, picture: "pfps/kings/griffin.png", bgColor: "#64B5F6" },
+					{ battingOrder: 4, number: 33, name: "Lion", position: "SS", secondaryPos: "CP", contact: 1, power: 1, eye: 2, speed: 0, control: 2, velocity: 2, stamina: 6, arm: 1, glove: 2, picture: "pfps/kings/lion.jpg", bgColor: "#64B5F6" },
+					{ battingOrder: 5, number: 1, name: "Justin", position: "RF", secondaryPos: "", contact: 0, power: 3, eye: 0, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 3, glove: 0, picture: "pfps/kings/justin.png", bgColor: "#64B5F6" },
+					{ battingOrder: 6, number: 2, name: "Travis", position: "LF", secondaryPos: "", contact: 1, power: 2, eye: 0, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 3, glove: 0, picture: "pfps/kings/travis.jpg", bgColor: "#64B5F6" },
+					{ battingOrder: 7, number: 5, name: "Aspen", position: "1B", secondaryPos: "RP", contact: 2, power: 1, eye: 0, speed: 1, control: 3, velocity: 1, stamina: 10, arm: 1, glove: 2, picture: "pfps/kings/aspen.jpg", bgColor: "#64B5F6" },
+					{ battingOrder: 8, number: 11, name: "Bailey", position: "2B", secondaryPos: "", contact: 1, power: 1, eye: 1, speed: 1, control: 0, velocity: 0, stamina: 0, arm: 2, glove: 2, picture: "pfps/kings/bailey.webp", bgColor: "#64B5F6" },
+					{ battingOrder: 9, number: 0, name: "Rose", position: "C", secondaryPos: "", contact: 0, power: 1, eye: 3, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 1, glove: 1, picture: "pfps/kings/rose.jpg", bgColor: "#64B5F6" }
 				]
 			},
 			{
 				name: "Nine-Lives Nine",
 				players: [
-					{ battingOrder: 1, number: 0, name: "Bunny", position: "2B", secondaryPos: "", contact: 1, power: 0, eye: 0, speed: 3, control: 0, velocity: 0, stamina: 0, arm: 3, glove: 2 },
-					{ battingOrder: 2, number: 0, name: "Beni", position: "CF", secondaryPos: "P", contact: 1, power: 0, eye: 1, speed: 2, control: 3, velocity: 1, stamina: 8, arm: 2, glove: 1 },
-					{ battingOrder: 3, number: 0, name: "Oliver", position: "P", secondaryPos: "INF", contact: 1, power: 0, eye: 1, speed: 1, control: 0, velocity: 4, stamina: 8, arm: 1, glove: 3 },
-					{ battingOrder: 4, number: 0, name: "Boba", position: "C", secondaryPos: "", contact: 0, power: 2, eye: 0, speed: 1, control: 0, velocity: 0, stamina: 0, arm: 1, glove: 2 },
-					{ battingOrder: 5, number: 0, name: "Fizzy", position: "SS", secondaryPos: "P", contact: 2, power: 0, eye: 0, speed: 2, control: 2, velocity: 2, stamina: 10, arm: 0, glove: 2 },
-					{ battingOrder: 6, number: 0, name: "Garfield", position: "1B", secondaryPos: "", contact: 1, power: 2, eye: 3, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 0, glove: 0 },
-					{ battingOrder: 7, number: 0, name: "Cleo", position: "LF", secondaryPos: "", contact: 1, power: 1, eye: 1, speed: 1, control: 0, velocity: 0, stamina: 0, arm: 0, glove: 2 },
-					{ battingOrder: 8, number: 0, name: "Twit", position: "RF", secondaryPos: "", contact: 1, power: 0, eye: 2, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 2, glove: 1 },
-					{ battingOrder: 9, number: 0, name: "Dio", position: "3B", secondaryPos: "", contact: 1, power: 1, eye: 2, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 2, glove: 2 }
+					{ battingOrder: 1, number: 8, name: "Bunny", position: "2B", secondaryPos: "", contact: 1, power: 0, eye: 0, speed: 3, control: 0, velocity: 0, stamina: 0, arm: 3, glove: 2, picture: "pfps/cats/bunny.webp", bgColor: "#009688" },
+					{ battingOrder: 2, number: 13, name: "Beni", position: "CF", secondaryPos: "P", contact: 1, power: 0, eye: 1, speed: 2, control: 2, velocity: 1, stamina: 10, arm: 2, glove: 1, picture: "pfps/cats/beni.jpg", bgColor: "#009688" },
+					{ battingOrder: 3, number: 2, name: "Oliver", position: "P", secondaryPos: "INF", contact: 1, power: 0, eye: 1, speed: 1, control: 0, velocity: 4, stamina: 25, arm: 1, glove: 3, picture: "pfps/cats/oliver.jpg", bgColor: "#009688" },
+					{ battingOrder: 4, number: 44, name: "Boba", position: "C", secondaryPos: "", contact: 0, power: 2, eye: 0, speed: 1, control: 0, velocity: 0, stamina: 0, arm: 1, glove: 2, picture: "pfps/cats/boba.jpg", bgColor: "#009688" },
+					{ battingOrder: 5, number: 1, name: "Fizzy", position: "SS", secondaryPos: "P", contact: 2, power: 0, eye: 0, speed: 2, control: 3, velocity: 2, stamina: 6, arm: 0, glove: 2, picture: "pfps/cats/fizzy.jpg", bgColor: "#009688" },
+					{ battingOrder: 6, number: 99, name: "Garfield", position: "1B", secondaryPos: "", contact: 1, power: 2, eye: 3, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 0, glove: 0, picture: "pfps/cats/garfield.jpg", bgColor: "#009688" },
+					{ battingOrder: 7, number: 22, name: "Cleo", position: "LF", secondaryPos: "", contact: 1, power: 1, eye: 1, speed: 1, control: 0, velocity: 0, stamina: 0, arm: 0, glove: 2, picture: "pfps/cats/cleo.jpg", bgColor: "#009688" },
+					{ battingOrder: 8, number: 21, name: "Twit", position: "RF", secondaryPos: "", contact: 1, power: 0, eye: 2, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 2, glove: 1, picture: "pfps/cats/twit.jpg", bgColor: "#009688" },
+					{ battingOrder: 9, number: 9, name: "Dio", position: "3B", secondaryPos: "", contact: 1, power: 1, eye: 2, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 2, glove: 2, picture: "pfps/cats/dio.jpg", bgColor: "#009688" }
 				]
 			},
 			{
 				name: "Straw Hat Pirates",
 				players: [
-					{ battingOrder: 1, number: 0, name: "Vivi", position: "CF", secondaryPos: "", contact: 2, power: 1, eye: 1, speed: 1, control: 0, velocity: 0, stamina: 0, arm: 1, glove: 0 },
-					{ battingOrder: 2, number: 0, name: "Usopp", position: "RF", secondaryPos: "", contact: 1, power: 1, eye: 1, speed: 1, control: 0, velocity: 0, stamina: 0, arm: 2, glove: 0 },
-					{ battingOrder: 3, number: 0, name: "Luffy", position: "SS", secondaryPos: "P", contact: 2, power: 1, eye: 0, speed: 1, control: 1, velocity: 2, stamina: 14, arm: 3, glove: 1 },
-					{ battingOrder: 4, number: 0, name: "Zoro", position: "2B", secondaryPos: "P", contact: 0, power: 3, eye: 1, speed: 0, control: 1, velocity: 3, stamina: 14, arm: 1, glove: 2 },
-					{ battingOrder: 5, number: 0, name: "Robin", position: "1B", secondaryPos: "", contact: 2, power: 0, eye: 3, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 1, glove: 2 },
-					{ battingOrder: 6, number: 0, name: "Sanji", position: "3B", secondaryPos: "", contact: 1, power: 0, eye: 2, speed: 1, control: 0, velocity: 0, stamina: 0, arm: 0, glove: 2 },
-					{ battingOrder: 7, number: 0, name: "Franky", position: "C", secondaryPos: "", contact: 0, power: 4, eye: 0, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 2, glove: 2 },
-					{ battingOrder: 8, number: 0, name: "Chopper", position: "LF", secondaryPos: "", contact: 1, power: 1, eye: 1, speed: 1, control: 0, velocity: 0, stamina: 0, arm: 3, glove: 2 },
-					{ battingOrder: 9, number: 0, name: "Nami", position: "P", secondaryPos: "", contact: 0, power: 0, eye: 2, speed: 3, control: 3, velocity: 1, stamina: 12, arm: 1, glove: 1 }
+					{ battingOrder: 1, number: 7, name: "Vivi", position: "CF", secondaryPos: "", contact: 2, power: 1, eye: 1, speed: 1, control: 0, velocity: 0, stamina: 0, arm: 1, glove: 0, picture: "pfps/strawhars/vivi.png", bgColor: "#E65100" },
+					{ battingOrder: 2, number: 3, name: "Usopp", position: "RF", secondaryPos: "", contact: 1, power: 1, eye: 1, speed: 1, control: 0, velocity: 0, stamina: 0, arm: 2, glove: 0, picture: "pfps/strawhars/Usopp.webp", bgColor: "#E65100" },
+					{ battingOrder: 3, number: 1, name: "Luffy", position: "SS", secondaryPos: "CP", contact: 2, power: 1, eye: 0, speed: 1, control: 3, velocity: 2, stamina: 6, arm: 3, glove: 1, picture: "pfps/strawhars/luffy.webp", bgColor: "#E65100" },
+					{ battingOrder: 4, number: 2, name: "Zoro", position: "2B", secondaryPos: "RP", contact: 0, power: 3, eye: 1, speed: 0, control: 1, velocity: 3, stamina: 10, arm: 1, glove: 2, picture: "pfps/strawhars/zoro.jpg", bgColor: "#E65100" },
+					{ battingOrder: 5, number: 8, name: "Robin", position: "1B", secondaryPos: "", contact: 2, power: 0, eye: 3, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 1, glove: 2, picture: "pfps/strawhars/robin.webp", bgColor: "#E65100" },
+					{ battingOrder: 6, number: 4, name: "Sanji", position: "3B", secondaryPos: "", contact: 1, power: 0, eye: 2, speed: 1, control: 0, velocity: 0, stamina: 0, arm: 0, glove: 2, picture: "pfps/strawhars/sanji.webp", bgColor: "#E65100" },
+					{ battingOrder: 7, number: 9, name: "Franky", position: "C", secondaryPos: "", contact: 0, power: 4, eye: 0, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 2, glove: 2, picture: "pfps/strawhars/franky.jpg", bgColor: "#E65100" },
+					{ battingOrder: 8, number: 6, name: "Chopper", position: "LF", secondaryPos: "", contact: 1, power: 1, eye: 1, speed: 1, control: 0, velocity: 0, stamina: 0, arm: 3, glove: 2, picture: "pfps/strawhars/chopper.jpg", bgColor: "#E65100" },
+					{ battingOrder: 9, number: 5, name: "Nami", position: "SP", secondaryPos: "INF", contact: 0, power: 0, eye: 2, speed: 3, control: 3, velocity: 1, stamina: 25, arm: 1, glove: 1, picture: "pfps/strawhars/namni.jpg", bgColor: "#E65100" }
 				]
 			}
 		];
@@ -2060,4 +2199,6 @@
 		updateScoreDisplay();
 	});
 })();
+
+
 

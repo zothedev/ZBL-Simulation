@@ -250,6 +250,38 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
+}
+
+.roster-item-image {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  object-fit: cover;
+  border: 2px solid #ccc;
+  background-color: #f0f0f0;
+}
+
+/* Team-specific background colors for roster item images */
+.roster-item.team-rat-stack .roster-item-image {
+  background-color: #FF6B6B;
+  border-color: #FF6B6B;
+}
+
+.roster-item.team-content-kings .roster-item-image {
+  background-color: #FFD93D;
+  border-color: #FFD93D;
+}
+
+.roster-item.team-nine-lives .roster-item-image {
+  background-color: #FFD93D;
+  border-color: #FFD93D;
+}
+
+.roster-item.team-straw-hats .roster-item-image {
+  background-color: #6C5CE7;
+  border-color: #6C5CE7;
 }
 
 .roster-item:hover {
@@ -363,7 +395,7 @@ body {
 
 /* Team Color Classes */
 .team-rat-stack {
-  background: #f3e5f5;
+  background: #CE93D8;
   border-left-color: #9C27B0;
   border-top: 3px solid #9C27B0;
 }
@@ -383,7 +415,7 @@ body {
 }
 
 .team-content-kings {
-  background: #e3f2fd;
+  background: #64B5F6;
   border-left-color: #2196F3;
   border-top: 3px solid #2196F3;
 }
@@ -423,7 +455,7 @@ body {
 }
 
 .team-nine-lives {
-  background: #e0f2f1;
+  background: #4DB6AC;
   border-left-color: #009688;
   border-top: 3px solid #009688;
 }
@@ -444,13 +476,13 @@ body {
 
 /* Baserunner color classes - light shade of team color */
 .roster-item.baserunner-rat-stack {
-  background: #f3e5f5 !important;
+  background: #CE93D8 !important;
   border-left-color: #9C27B0 !important;
   font-weight: 600;
 }
 
 .roster-item.baserunner-content-kings {
-  background: #e3f2fd !important;
+  background: #64B5F6 !important;
   border-left-color: #2196F3 !important;
   font-weight: 600;
 }
@@ -462,7 +494,7 @@ body {
 }
 
 .roster-item.baserunner-nine-lives {
-  background: #e0f2f1 !important;
+  background: #4DB6AC !important;
   border-left-color: #009688 !important;
   font-weight: 600;
 }
@@ -559,10 +591,6 @@ select:focus {
   font-size: 0.95em;
   cursor: pointer;
   max-width: 150px;
-}
-
-#top-controls {
-  display: none;
 }
 
 #tabs-box {
@@ -853,7 +881,7 @@ p {
 }
 
 #determineFielderResult {
-  background-color: #f3e5f5;
+  background-color: #CE93D8;
   border-left: 4px solid #9C27B0;
   display: none;
 }
@@ -918,14 +946,14 @@ p {
 
 .team-name {
   font-weight: 600;
-  color: #666;
+  color: white;
   font-size: 0.9em;
 }
 
 .team-score-value {
   font-size: 1.3em;
   font-weight: 700;
-  color: #2a5298;
+  color: white;
 }
 
 .zone-header-btn {
@@ -1029,12 +1057,116 @@ p {
   display: flex;
   gap: 12px;
   flex: 1;
+  justify-content: space-around;
+}
+
+.infield-row {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  justify-content: space-around;
+  align-items: flex-start;
+  margin-bottom: 0;
 }
 
 .base-row.home-row {
   justify-content: center;
   margin-top: 12px;
   flex: none;
+  gap: 16px;
+}
+
+.home-mound-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 1;
+  justify-content: center;
+  align-items: center;
+  margin: 0;
+}
+
+.home-mound-row .mound-container {
+  order: 1;
+}
+
+.home-mound-row .base-container.home-base {
+  order: 2;
+}
+
+.catcher-row {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.mound-row {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  justify-content: center;
+  margin: 12px 0;
+}
+
+.mound-container {
+  flex: 0 1 70px;
+}
+
+.home-mound-row .base-container.home-base {
+  border-right: none;
+  padding-right: 0;
+}
+
+.home-mound-row .mound-container {
+  flex: 0 1 50px;
+  border-right: none;
+  padding-right: 0;
+}
+
+.mound-position {
+  width: 100%;
+  padding: 8px;
+  background: #f5f5f5;
+  border: 2px solid #8B4513;
+  text-align: center;
+  font-size: 0.85em;
+  color: #333;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  aspect-ratio: 1;
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+}
+
+.mound-position.occupied {
+  background: #4CAF50;
+  color: white;
+  border-color: #2E7D32;
+}
+
+.mound-position.occupied.team-rat-stack {
+  background: #9C27B0;
+  border-color: #6a1b9a;
+}
+
+.mound-position.occupied.team-content-kings {
+  background: #2196F3;
+  border-color: #1565c0;
+}
+
+.mound-position.occupied.team-straw-hats {
+  background: #e65100;
+  border-color: #bf360c;
+}
+
+.mound-position.occupied.team-nine-lives {
+  background: #009688;
+  border-color: #00695c;
+  color: white;
 }
 
 .base-container {
@@ -1043,6 +1175,29 @@ p {
   flex-direction: column;
   gap: 4px;
   align-items: center;
+  max-width: 70px;
+}
+
+.infield-row .base-container {
+  flex: 0 1 55px;
+  max-width: 55px;
+}
+
+/* Left half infield angled as forward slash / */
+/* 3B (base) is lowest */
+.infield-row > .base-container:first-child {
+  transform: translateY(60px);
+}
+
+/* 2B (base) is highest */
+.infield-row > .base-container:nth-child(4) {
+  transform: translateY(-60px);
+  margin-top: 20px;
+}
+
+/* 1B (base) is lowest */
+.infield-row > .base-container:nth-child(7) {
+  transform: translateY(60px);
 }
 
 .base-container.home-base {
@@ -1104,6 +1259,100 @@ p {
   color: white;
 }
 
+#outfield-display {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.outfield-row {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  justify-content: space-around;
+}
+
+.outfield-container {
+  flex: 0 1 90px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+}
+
+.fielder-position {
+  width: 100%;
+  padding: 6px;
+  background: #f5f5f5;
+  border: 1px solid #999;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 0.75em;
+  color: #333;
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+.fielder-position.diamond {
+  aspect-ratio: 1;
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  border: 2px solid #666;
+  padding: 4px;
+}
+
+.fielder-position.occupied {
+  background: #4CAF50;
+  color: white;
+  border-color: #2E7D32;
+}
+
+.fielder-position.occupied.team-rat-stack {
+  background: #9C27B0;
+  border-color: #6a1b9a;
+}
+
+.fielder-position.occupied.team-content-kings {
+  background: #2196F3;
+  border-color: #1565c0;
+}
+
+.fielder-position.occupied.team-straw-hats {
+  background: #e65100;
+  border-color: #bf360c;
+}
+
+.fielder-position.occupied.team-nine-lives {
+  background: #009688;
+  border-color: #00695c;
+  color: white;
+}
+
+.fielder-row {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  justify-content: space-around;
+  margin: 8px 0;
+}
+
+.fielder-container {
+  flex: 0 1 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+}
+
+.fielder-label {
+  font-weight: 700;
+  color: #666;
+  font-size: 0.7em;
+  text-transform: uppercase;
+}
+
 #right-sidebar {
   display: flex;
   flex-direction: column;
@@ -1127,6 +1376,14 @@ p {
   border-top: 2px solid #ddd;
   background: #f9f9f9;
   flex-shrink: 0;
+}
+
+#nextBatterButton {
+  display: block;
+  margin: 12px auto;
+  padding: 16px 24px !important;
+  font-size: 1em !important;
+  width: auto;
 }
 
 .timeline-btn {
@@ -1162,6 +1419,37 @@ p {
   border: 2px solid #ddd;
   min-width: 100px;
   max-width: 150px;
+}
+
+.player-card-image {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 2px solid #ccc;
+  margin-bottom: 8px;
+  background-color: #f0f0f0;
+}
+
+/* Team-specific background colors for player images */
+.pitcher-card.rat-stack .player-card-image,
+.batter-card.rat-stack .player-card-image {
+  background-color: #FF6B6B;
+}
+
+.pitcher-card.content-kings .player-card-image,
+.batter-card.content-kings .player-card-image {
+  background-color: #4ECDC4;
+}
+
+.pitcher-card.nine-lives .player-card-image,
+.batter-card.nine-lives .player-card-image {
+  background-color: #FFD93D;
+}
+
+.pitcher-card.straw-hat .player-card-image,
+.batter-card.straw-hat .player-card-image {
+  background-color: #6C5CE7;
 }
 
 .player-section {
