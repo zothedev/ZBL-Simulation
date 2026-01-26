@@ -9,7 +9,21 @@
     <script src="script.js" defer></script>
 </head>
 <body>
-    <div id="main-layout">
+    <div id="main-menu" class="menu-container">
+        <div class="menu-content">
+            <h1>ZBL Simulation</h1>
+            <div class="menu-buttons">
+                <button id="newGameBtn" class="menu-btn">New Game</button>
+                <button id="loadGameBtn" class="menu-btn">Load Game</button>
+            </div>
+            <div id="saved-games-list" class="saved-games-list" style="display: none;">
+                <h3>Saved Matches</h3>
+                <div id="saved-games-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-layout" style="display: none;">
         <div id="left-column">
             <div id="left-roster" class="roster-panel">
                 <h3>Pitching Team</h3>
@@ -36,6 +50,10 @@
                 <div id="manual-roll-toggle">
                     <label for="manualRollSwitch">Manual Rolls:</label>
                     <input type="checkbox" id="manualRollSwitch">
+                    <label for="selectOutcomesSwitch" style="margin-left: 20px;">Select Outcomes:</label>
+                    <input type="checkbox" id="selectOutcomesSwitch">
+                    <button id="saveGameBtn" class="header-btn" style="margin-left: 30px;">Save Game</button>
+                    <button id="mainMenuBtn" class="header-btn" style="margin-left: 10px;">Main Menu</button>
                 </div>
             </div>
             <div id="top-controls">
