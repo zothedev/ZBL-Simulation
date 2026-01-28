@@ -3,6 +3,7 @@
 	let pitchingTeamIndex = ''; // Index of pitching team
 	let battingTeamIndex = ''; // Index of batting team
 	let currentPitcherIndex = -1; // Index of currently selected pitcher
+	let lastPitcherIndex = { '0': -1, '1': -1 }; // Track last pitcher for each team (by team index)
 	let currentBatterIndex = -1; // Index of currently selected batter
 	let pdModifier = 0; // Pitcher Delivery modifier for Batter Response
 	let brOutcome = ''; // Batter Response outcome for fielder determination
@@ -17,6 +18,7 @@
 	let highlightedFielder = null; // Track which fielder is highlighted
 	let useManualRolls = false; // Toggle for manual dice rolls
 	let lastManualRoll = null; // Store last manual roll input
+	let selectOutcomesMode = false; // Toggle for selecting specific outcomes instead of rolling
 	let doublePlayAttempt = null; // Track DP attempt state (e.g., { phase: 'toSecond', runnerOnFirst: 'name' })
 	let throwTarget = '1b'; // Track current throw target base
 	let playLog = []; // Track play log entries
@@ -129,6 +131,26 @@
 			// Keep only the last 50 entries
 			while (logContainer.children.length > 50) {
 				logContainer.removeChild(logContainer.lastChild);
+			}
+		}
+	}
+
+	function updatePlayLog() {
+		// Refresh play log display from current playLog array
+		const logContainer = document.getElementById('play-log-entries');
+		if (logContainer) {
+			logContainer.innerHTML = '';
+			// Display play log in reverse order (most recent first)
+			for (let i = playLog.length - 1; i >= 0; i--) {
+				const entry = document.createElement('div');
+				entry.className = 'play-log-entry';
+				entry.textContent = playLog[i];
+				logContainer.appendChild(entry);
+				
+				// Keep only the last 50 entries
+				if (logContainer.children.length >= 50) {
+					break;
+				}
 			}
 		}
 	}
@@ -315,7 +337,19 @@
 		updatePitcherSelect();
 		updateBatterSelect();
 		
-		// Keep the same pitcher from the previous half inning (don't auto-select a new one)
+		// Auto-select the pitcher who was last pitching for this team
+		const pitchingTeam = teamsData[pitchingTeamIndex];
+		let pitcherToSelect = lastPitcherIndex[pitchingTeamIndex];
+		
+		// If no pitcher was previously tracked for this team, select the 25 stamina pitcher
+		if (pitcherToSelect === -1) {
+			pitcherToSelect = pitchingTeam.players.findIndex(player => player.position === 'P' && player.stamina === 25);
+		}
+		
+		if (pitcherToSelect !== -1) {
+			document.getElementById('pitcherSelect').value = pitcherToSelect;
+			setCurrentPitcher(pitcherToSelect);
+		}
 		
 		// Auto-select the first batter for the new batting team
 		const battingTeam = teamsData[battingTeamIndex];
@@ -476,15 +510,12 @@
 			updateOutsDisplay();
 			updateInningDisplay();
 			
-			// Auto-select the primary pitcher (position: "SP" or "P")
+			// Auto-select the main pitcher (25 stamina pitcher) at game start
 			const team = teamsData[teamIndex];
-			let primaryPitcher = team.players.findIndex(player => player.position === "SP");
-			if (primaryPitcher === -1) {
-				primaryPitcher = team.players.findIndex(player => player.position === "P");
-			}
-			if (primaryPitcher !== -1) {
-				document.getElementById('pitcherSelect').value = primaryPitcher;
-				setCurrentPitcher(primaryPitcher);
+			let mainPitcher = team.players.findIndex(player => player.position === "P" && player.stamina === 25);
+			if (mainPitcher !== -1) {
+				document.getElementById('pitcherSelect').value = mainPitcher;
+				setCurrentPitcher(mainPitcher);
 				clearResults();
 			}
 		}
@@ -514,34 +545,25 @@
 		const newPitcher = team.players[playerIndex];
 		
 		// If the new pitcher is not a pitcher position, swap with whoever is currently the primary pitcher
-		const pitcherPositions = ['P', 'SP', 'RP', 'CP'];
-		if (!pitcherPositions.includes(newPitcher.position)) {
-			// Find the current primary pitcher (look for SP first, then P, then RP, then CP)
-			let primaryPitcher = team.players.find(p => p.position === 'SP');
-			if (!primaryPitcher) primaryPitcher = team.players.find(p => p.position === 'P');
-			if (!primaryPitcher) primaryPitcher = team.players.find(p => p.position === 'RP');
-			if (!primaryPitcher) primaryPitcher = team.players.find(p => p.position === 'CP');
+		if (newPitcher.position !== 'P') {
+			// Find the current primary pitcher
+			let primaryPitcher = team.players.find(p => p.position === 'P');
 			
 			if (primaryPitcher) {
-				// Determine what role the new pitcher should take
-				// Use their secondaryPos if it's a pitcher role, otherwise use CP as default
-				let newPitcherRole = 'CP'; // Default role for relief pitchers
-				if (newPitcher.secondaryPos && pitcherPositions.includes(newPitcher.secondaryPos)) {
-					newPitcherRole = newPitcher.secondaryPos;
-				}
-				
 				// Save the new pitcher's original position
 				const newPitcherOriginalPos = newPitcher.position;
 				
 				// Swap positions
-				newPitcher.position = newPitcherRole;
-				newPitcher.currentPosition = newPitcherRole;
+				newPitcher.position = 'P';
+				newPitcher.currentPosition = 'P';
 				primaryPitcher.position = newPitcherOriginalPos;
 				primaryPitcher.currentPosition = newPitcherOriginalPos;
 			}
 		}
 		
 		currentPitcherIndex = parseInt(playerIndex);
+		// Track this pitcher as the last pitcher for this team
+		lastPitcherIndex[pitchingTeamIndex] = parseInt(playerIndex);
 		populateRostersForTeams();
 		updateRosterHighlight();
 		updateZoneDisplay();
@@ -1020,6 +1042,30 @@
 
 
 	function determineFielder() {
+		// If select outcomes mode is on, show outcome selection
+		if (selectOutcomesMode) {
+			// Determine available fielders based on brOutcome
+			let availableFielders = [];
+			switch(brOutcome) {
+				case 'Dribbler':
+				case 'Bloop':
+				case 'Screamer*':
+					availableFielders = ['Pitcher', 'Catcher', 'First Base', 'Second Base', 'Shortstop', 'Third Base'];
+					break;
+				case 'Can of Corn':
+				case 'Laser':
+					availableFielders = ['Left Fielder', 'Center Fielder', 'Right Fielder'];
+					break;
+			}
+			
+			const outcomes = availableFielders.map(fielder => ({ name: fielder, value: fielder }));
+			
+			showOutcomeSelection('Select Fielder', outcomes, function(selectedOutcome) {
+				executeFielderDeterminationWithOutcome(selectedOutcome);
+			});
+			return;
+		}
+		
 		let fielderType;
 		switch(brOutcome) {
 			case 'Dribbler':
@@ -1310,6 +1356,19 @@
 	}
 
 	function handleCheck() {
+		// If select outcomes mode is on, show outcome selection
+		if (selectOutcomesMode) {
+			const outcomes = [
+				{ name: "Pass", value: "Pass" },
+				{ name: "Fail", value: "Fail" }
+			];
+			
+			showOutcomeSelection('Select Handle Check Outcome', outcomes, function(selectedOutcome) {
+				executeHandleCheckWithOutcome(selectedOutcome);
+			});
+			return;
+		}
+		
 		// Handle Score = D6 Roll + Fielder's Glove Stat
 		const roll = getRandomRoll(6, 'Handle Check Die');
 		const handleScore = roll + fielderData.glove;
@@ -1765,7 +1824,26 @@
 	function startBatterResponse() {
 		const batter = teamsData[battingTeamIndex].players[currentBatterIndex];
 		const pitcher = teamsData[pitchingTeamIndex].players[currentPitcherIndex];
-		const roll = getRandomRoll(12, 'Batter Response Die');
+		
+		// If select outcomes mode is on, show outcome selection
+		if (selectOutcomesMode) {
+			const outcomes = [
+				{ name: "SO Swinging", value: "SO Swinging" },
+				{ name: "Dribbler", value: "Dribbler" },
+				{ name: "Can of Corn", value: "Can of Corn" },
+				{ name: "Bloop", value: "Bloop" },
+				{ name: "Screamer*", value: "Screamer*" },
+				{ name: "Laser", value: "Laser" },
+				{ name: "Moonshot", value: "Moonshot" }
+			];
+			
+			showOutcomeSelection('Select Batter Response Outcome', outcomes, function(selectedOutcome) {
+				executeBatterResponseWithOutcome(selectedOutcome);
+			});
+			return;
+		}
+		
+		const roll = getRandomRoll(20, 'Batter Response Die');
 		
 		// Special rule: Nat 1 is always strikeout swinging
 		if (roll === 1) {
@@ -1773,7 +1851,7 @@
 			updateOutcomeDisplay('STRIKEOUT SWINGING - OUT');
 			
 			// Create tab for result
-			let brChart = `${createTableHeader()}${createTableRow(roll, 'D12 Roll (Natural 1)')}${closeTable()}`;
+			let brChart = `${createTableHeader()}${createTableRow(roll, 'D20 Roll (Natural 1)')}${closeTable()}`;
 			createTab('br', 'BR', brChart, true);
 			
 			// Increment outs
@@ -1788,27 +1866,27 @@
 			return;
 		}
 		
-		// Calculate BR: D12 - Velocity + Contact + PD Modifier, then add Power if result >= 9
+		// Calculate BR: D20 - Velocity + Contact + PD Modifier, then add Power if roll >= 16
 		const subtotal = roll - pitcher.velocity + batter.contact + pdModifier;
-		const total = subtotal >= 9 ? subtotal + batter.power : subtotal;
+		const total = roll >= 16 ? subtotal + batter.power : subtotal;
 		
 		let outcome, parentOutcome;
-		if (total <= 3) {
+		if (total <= 5) {
 			outcome = "SO Swinging";
 			parentOutcome = "Strikeout";
-		} else if (total <= 5) {
+		} else if (total >= 6 && total <= 9) {
 			outcome = "Dribbler";
 			parentOutcome = "Ground Ball";
-		} else if (total === 6) {
+		} else if (total >= 10 && total <= 12) {
 			outcome = "Can of Corn";
 			parentOutcome = "Pop Up";
-		} else if (total <= 8) {
+		} else if (total >= 13 && total <= 15) {
 			outcome = "Bloop";
 			parentOutcome = "Line Drive";
-		} else if (total <= 10) {
+		} else if (total >= 16 && total <= 18) {
 			outcome = "Screamer*";
 			parentOutcome = "Ground Ball";
-		} else if (total === 11) {
+		} else if (total >= 19 && total <= 20) {
 			outcome = "Laser";
 			parentOutcome = "Line Drive";
 		} else {
@@ -1825,15 +1903,15 @@
 		}
 
 		
-		// Store outcome and show Determine Fielder button if ball is in play (4-11)
+		// Store outcome and show Determine Fielder button if ball is in play (6-20)
 		brOutcome = outcome;
 		
 		// Determine play type for display summary
 		let brPlayType = '';
-		if (total >= 12) {
+		if (total >= 21) {
 			brPlayType = 'HOME RUN';
 			updateOutcomeDisplay(`${outcome} - ${brPlayType}`);
-		} else if (total <= 3) {
+		} else if (total <= 5) {
 			brPlayType = 'OUT';
 			updateOutcomeDisplay(`${outcome} - ${brPlayType}`);
 			// Increment outs for strikeout
@@ -1842,19 +1920,19 @@
 			updateNextBatterButton();
 			const batter = teamsData[battingTeamIndex].players[currentBatterIndex];
 			logPlay(teamsData[battingTeamIndex].name, batter.name, 'strikes out swinging');
-		} else if (total >= 4 && total <= 11) {
+		} else if (total >= 6 && total <= 20) {
 			brPlayType = 'IN PLAY';
 			updateOutcomeDisplay(`${outcome} - ${brPlayType}`);
 		}
 		
-		if (total >= 4 && total <= 11) {
+		if (total >= 6 && total <= 20) {
 			document.getElementById('determineFielderButton').disabled = false;
 		} else {
 			document.getElementById('determineFielderButton').disabled = true;
 		}
 		
-		// Handle home run (Moonshot - total >= 12)
-		if (total >= 12) {
+		// Handle home run (Moonshot - total >= 21)
+		if (total >= 21) {
 			// Home run: advance all runners and batter scores immediately (not on base)
 			advanceRunnersMultipleBases(4);
 			updateBasesDisplay();
@@ -1869,7 +1947,7 @@
 		// Update tab for Batter Response
 		const velocityMod = -pitcher.velocity;
 		const contactVal = batter.contact;
-		let brChart = `${createTableHeader()}${createTableRow(roll, 'D12 Roll')}${createTableRow(velocityMod < 0 ? `${velocityMod}` : `+${velocityMod}`, "Pitcher's Velocity (Subtracted)")}${createTableRow(contactVal >= 0 ? `+${contactVal}` : `${contactVal}`, "Batter's Contact Stat")}`;
+		let brChart = `${createTableHeader()}${createTableRow(roll, 'D20 Roll')}${createTableRow(velocityMod < 0 ? `${velocityMod}` : `+${velocityMod}`, "Pitcher's Velocity (Subtracted)")}${createTableRow(contactVal >= 0 ? `+${contactVal}` : `${contactVal}`, "Batter's Contact Stat")}`;
 		
 		if (pdModifier === 1) {
 			brChart += `${createTableRow('+1', 'Down the Middle Bonus')}`;
@@ -1877,12 +1955,598 @@
 			brChart += `${createTableRow('-1', 'Painted Penalty')}`;
 		}
 		
-		if (subtotal >= 9) {
+		if (roll >= 16) {
 			brChart += `${createTableRow(`+${batter.power}`, "Batter's Power Stat")}`;
 		}
 		
 		brChart += `${createTableRow(total, 'Total Result', true)}${closeTable()}`;
 		createTab('br', 'BR', brChart, true);
+	}
+
+	function showOutcomeSelection(title, outcomes, callback) {
+		// Create a modal dialog for outcome selection
+		const modal = document.createElement('div');
+		modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+		
+		const content = document.createElement('div');
+		content.style.cssText = 'background: white; padding: 20px; border-radius: 8px; min-width: 300px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);';
+		
+		const heading = document.createElement('h3');
+		heading.textContent = title;
+		heading.style.marginTop = '0';
+		content.appendChild(heading);
+		
+		outcomes.forEach(outcome => {
+			const button = document.createElement('button');
+			button.textContent = outcome.name;
+			button.style.cssText = 'display: block; width: 100%; padding: 10px; margin: 8px 0; background: #2a5298; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;';
+			button.onclick = function() {
+				modal.remove();
+				callback(outcome.value);
+			};
+			button.onmouseover = function() {
+				this.style.backgroundColor = '#1a3a7a';
+			};
+			button.onmouseout = function() {
+				this.style.backgroundColor = '#2a5298';
+			};
+			content.appendChild(button);
+		});
+		
+		modal.appendChild(content);
+		document.body.appendChild(modal);
+	}
+
+	function executeBatterResponseWithOutcome(selectedOutcome) {
+		const batter = teamsData[battingTeamIndex].players[currentBatterIndex];
+		const pitcher = teamsData[pitchingTeamIndex].players[currentPitcherIndex];
+		
+		// Map selected outcome to BR total and other data
+		let total, outcome, brPlayType;
+		
+		if (selectedOutcome === 'SO Swinging') {
+			total = 5;
+			outcome = 'SO Swinging';
+			brPlayType = 'OUT';
+		} else if (selectedOutcome === 'Dribbler') {
+			total = 8;
+			outcome = 'Dribbler';
+			brPlayType = 'IN PLAY';
+		} else if (selectedOutcome === 'Can of Corn') {
+			total = 11;
+			outcome = 'Can of Corn';
+			brPlayType = 'IN PLAY';
+		} else if (selectedOutcome === 'Bloop') {
+			total = 14;
+			outcome = 'Bloop';
+			brPlayType = 'IN PLAY';
+		} else if (selectedOutcome === 'Screamer*') {
+			total = 17;
+			outcome = 'Screamer*';
+			brPlayType = 'IN PLAY';
+		} else if (selectedOutcome === 'Laser') {
+			total = 20;
+			outcome = 'Laser';
+			brPlayType = 'IN PLAY';
+		} else if (selectedOutcome === 'Moonshot') {
+			total = 21;
+			outcome = 'Moonshot';
+			brPlayType = 'HOME RUN';
+		}
+		
+		// Store outcome for Fielder Determination
+		brOutcome = outcome;
+		
+		// Update display
+		updateOutcomeDisplay(`${outcome} - ${brPlayType}`);
+		
+		// Create BR tab with "Selected" outcome
+		const brChart = `${createTableHeader()}${createTableRow('Selected', 'Batter Response Outcome')}${createTableRow(selectedOutcome, 'Result', true)}${closeTable()}`;
+		createTab('br', 'BR', brChart, true);
+		
+		// Handle different outcomes
+		if (total <= 5) {
+			// Strikeout
+			outs++;
+			updateOutsDisplay();
+			updateNextBatterButton();
+			document.getElementById('batterResponseButton').disabled = true;
+			document.getElementById('determineFielderButton').disabled = true;
+			logPlay(teamsData[battingTeamIndex].name, batter.name, 'strikes out swinging');
+		} else if (total >= 6 && total <= 20) {
+			// Ball in play - enable fielder determination
+			document.getElementById('determineFielderButton').disabled = false;
+		} else if (total >= 21) {
+			// Home run
+			advanceRunnersMultipleBases(4);
+			updateBasesDisplay();
+			updateScoreDisplay();
+			logPlay(teamsData[battingTeamIndex].name, batter.name, 'hits a HOME RUN!');
+			document.getElementById('batterResponseButton').disabled = true;
+			document.getElementById('determineFielderButton').disabled = true;
+		}
+		
+		// Disable the batter response button
+		document.getElementById('batterResponseButton').disabled = true;
+	}
+
+	function executeFielderDeterminationWithOutcome(selectedOutcome) {
+		// Map selected outcome to fielder
+		let fielderName, fielderCode, gloveStat, armStat;
+		
+		const fielderMap = {
+			'Pitcher': { code: 'P' },
+			'Catcher': { code: 'C' },
+			'First Base': { code: '1B' },
+			'Second Base': { code: '2B' },
+			'Shortstop': { code: 'SS' },
+			'Third Base': { code: '3B' },
+			'Left Fielder': { code: 'LF' },
+			'Center Fielder': { code: 'CF' },
+			'Right Fielder': { code: 'RF' }
+		};
+		
+		fielderName = selectedOutcome;
+		fielderCode = fielderMap[selectedOutcome].code;
+		
+		// Get fielder's stats from player data
+		const pitchingTeam = teamsData[pitchingTeamIndex];
+		gloveStat = 0;
+		armStat = 0;
+		let actualFielderName = selectedOutcome;
+		
+		if (pitchingTeam && fielderCode) {
+			let fielder = pitchingTeam.players.find(p => p.currentPosition === fielderCode);
+			if (!fielder) {
+				fielder = pitchingTeam.players.find(p => p.secondaryPos === fielderCode);
+			}
+			if (fielder) {
+				gloveStat = fielder.glove;
+				armStat = fielder.arm;
+				actualFielderName = fielder.name;
+			}
+		}
+		
+		// Store fielder data
+		fielderData = {
+			name: actualFielderName,
+			code: fielderCode,
+			glove: gloveStat,
+			arm: armStat
+		};
+		
+		// Create DF tab
+		const dfChart = `${createTableHeader()}${createTableRow('Selected', 'Fielder Determination Outcome')}${createTableRow(selectedOutcome, 'Result', true)}${closeTable()}`;
+		createTab('fielder', 'DF', dfChart, true);
+		
+		// Highlight fielder and show info
+		highlightFielderByName(actualFielderName);
+		document.getElementById('outcome-line2').textContent = `${selectedOutcome} attempting to field`;
+		document.getElementById('outcome-line2').style.display = 'block';
+		
+		// Enable handle check button
+		document.getElementById('handleCheckButton').disabled = false;
+		document.getElementById('determineFielderButton').disabled = true;
+	}
+
+	function executeHandleCheckWithOutcome(selectedOutcome) {
+		// Map outcome: Pass or Fail
+		const handled = selectedOutcome === 'Pass';
+		
+		// Determine required score based on brOutcome
+		const handleScoreNeeded = {
+			'Dribbler': 4,
+			'Can of Corn': 3,
+			'Bloop': 5,
+			'Screamer*': 6,
+			'Laser': 7
+		};
+		
+		const scoreNeeded = handleScoreNeeded[brOutcome] || 0;
+		
+		// Check if catchable
+		const catchableBalls = ['Can of Corn', 'Bloop', 'Laser'];
+		const isCatchable = catchableBalls.includes(brOutcome);
+		
+		let result;
+		if (handled) {
+			result = 'Handled';
+			
+			if (isCatchable) {
+				// Caught out
+				outs++;
+				updateOutsDisplay();
+				updateNextBatterButton();
+				updateOutcomeDisplay('BATTER OUT - CAUGHT');
+				const batter = teamsData[battingTeamIndex].players[currentBatterIndex];
+				
+				let outType = 'flew out to';
+				if (brOutcome === 'Laser' || brOutcome === 'Bloop') {
+					outType = 'lined out to';
+				}
+				logPlay(teamsData[battingTeamIndex].name, batter.name, `${outType} ${fielderData.name}`);
+				
+				// Show tag-up button if runners on 2B or 3B
+				const tagUpButton = document.getElementById('tagUpButton');
+				if (runners['2b'] !== null || runners['3b'] !== null) {
+					tagUpButton.style.display = 'inline-block';
+					tagUpButton.disabled = false;
+				} else {
+					tagUpButton.style.display = 'none';
+					tagUpButton.disabled = true;
+				}
+			}
+		} else {
+			result = 'Not Handled - Single, Runners advance 1 base';
+			
+			// Check if double
+			const isDouble = brOutcome === 'Laser' || brOutcome === 'Screamer*';
+			
+			if (isDouble) {
+				advanceRunnersMultipleBases(2);
+				runners['2b'] = teamsData[battingTeamIndex].players[currentBatterIndex].name;
+				result = 'Not Handled - Double, Runners advance 2 bases';
+			} else {
+				advanceRunners();
+				addRunnerToBase('1b');
+			}
+			
+			updateBasesDisplay();
+			populateRostersForTeams();
+			updateScoreDisplay();
+			const batter = teamsData[battingTeamIndex].players[currentBatterIndex];
+			
+			let hitDescription = 'hits a single';
+			if (brOutcome === 'Laser') {
+				hitDescription = 'hits a laser double';
+			} else if (brOutcome === 'Bloop') {
+				hitDescription = 'hits a bloop single';
+			} else if (brOutcome === 'Dribbler') {
+				hitDescription = 'hits a dribbler';
+			} else if (brOutcome === 'Screamer*') {
+				hitDescription = 'hits a screamer double';
+			}
+			logPlay(teamsData[battingTeamIndex].name, batter.name, hitDescription);
+			
+			const tagUpButton = document.getElementById('tagUpButton');
+			tagUpButton.style.display = 'none';
+			tagUpButton.disabled = true;
+		}
+		
+		// Update fielder highlight
+		updateFielderHighlightColor(handled);
+		
+		// Update outcome display
+		const handleStatus = handled ? 'Handled' : 'Not handled';
+		document.getElementById('outcome-line2').textContent = `${fielderData.name} - ${handleStatus}`;
+		document.getElementById('outcome-line2').style.display = 'block';
+		
+		// Create HC tab
+		const tabContent = `${createTableHeader()}${createTableRow('Selected', 'Handle Check Outcome')}${createTableRow(selectedOutcome, 'Result', true)}${createTableRow(scoreNeeded, 'Score Needed')}${closeTable()}`;
+		createTab('handle', 'HC', tabContent, true);
+		
+		// Show throw button if handled and not catchable
+		if (handled && !isCatchable) {
+			const isGroundBall = ['Dribbler', 'Screamer*'].includes(brOutcome);
+			const runnerOnFirst = runners['1b'] !== null;
+			const runnerOnSecond = runners['2b'] !== null;
+			const runnerOnThird = runners['3b'] !== null;
+			const canAttemptDoublePlay = outs < 2;
+			
+			if (isGroundBall && runnerOnFirst && canAttemptDoublePlay) {
+				let firstThrowTarget = '2b';
+				
+				if (runnerOnFirst && runnerOnSecond && runnerOnThird) {
+					firstThrowTarget = 'home';
+				} else if (runnerOnFirst && runnerOnSecond) {
+					firstThrowTarget = '3b';
+				}
+				
+				throwTarget = firstThrowTarget;
+				doublePlayAttempt = {
+					phase: 'toSecond',
+					primaryFielderCode: fielderData.code,
+					runnerOnFirst: runners['1b'],
+					batter: teamsData[battingTeamIndex].players[currentBatterIndex].name
+				};
+				document.getElementById('outcome-line3').textContent = 'Double Play Attempt!';
+				document.getElementById('outcome-line3').style.display = 'block';
+			} else {
+				throwTarget = '1b';
+				doublePlayAttempt = null;
+				document.getElementById('outcome-line3').style.display = 'none';
+			}
+			
+			flashBase(throwTarget);
+			
+			let throwButton = document.getElementById('throwButton');
+			if (!throwButton) {
+				throwButton = document.createElement('button');
+				throwButton.id = 'throwButton';
+				throwButton.textContent = 'Throw';
+				throwButton.onclick = performThrow;
+				const timelineButtons = document.getElementById('timeline-buttons');
+				if (timelineButtons) {
+					timelineButtons.appendChild(throwButton);
+				}
+			}
+			throwButton.disabled = false;
+		}
+		
+		// Disable handle check button
+		document.getElementById('handleCheckButton').disabled = true;
+	}
+
+	function showOutcomeSelection(title, outcomes, callback) {
+		// Create modal overlay
+		const modal = document.createElement('div');
+		modal.style.position = 'fixed';
+		modal.style.top = '0';
+		modal.style.left = '0';
+		modal.style.width = '100%';
+		modal.style.height = '100%';
+		modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+		modal.style.display = 'flex';
+		modal.style.alignItems = 'center';
+		modal.style.justifyContent = 'center';
+		modal.style.zIndex = '10000';
+		
+		// Create modal content box
+		const content = document.createElement('div');
+		content.style.backgroundColor = 'white';
+		content.style.padding = '20px';
+		content.style.borderRadius = '8px';
+		content.style.maxWidth = '500px';
+		content.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+		
+		// Add title
+		const titleEl = document.createElement('h2');
+		titleEl.textContent = title;
+		titleEl.style.marginTop = '0';
+		titleEl.style.marginBottom = '15px';
+		titleEl.style.textAlign = 'center';
+		content.appendChild(titleEl);
+		
+		// Add outcome buttons
+		const buttonContainer = document.createElement('div');
+		buttonContainer.style.display = 'grid';
+		buttonContainer.style.gridTemplateColumns = '1fr';
+		buttonContainer.style.gap = '10px';
+		
+		outcomes.forEach(outcome => {
+			const btn = document.createElement('button');
+			btn.textContent = outcome.name;
+			btn.style.padding = '10px 15px';
+			btn.style.backgroundColor = '#2a5298';
+			btn.style.color = 'white';
+			btn.style.border = 'none';
+			btn.style.borderRadius = '4px';
+			btn.style.cursor = 'pointer';
+			btn.style.fontSize = '14px';
+			btn.style.fontWeight = 'bold';
+			
+			btn.onmouseover = function() {
+				this.style.backgroundColor = '#1e3f66';
+			};
+			btn.onmouseout = function() {
+				this.style.backgroundColor = '#2a5298';
+			};
+			
+			btn.onclick = function() {
+				try {
+					callback(outcome.value);
+				} catch (error) {
+					console.error('Error in outcome callback:', error);
+				}
+				modal.remove();
+			};
+			
+			buttonContainer.appendChild(btn);
+		});
+		
+		content.appendChild(buttonContainer);
+		modal.appendChild(content);
+		document.body.appendChild(modal);
+	}
+
+	function executePitcherDeliveryWithOutcome(selectedOutcome, pitcher, batter) {
+		// Map selected outcome to game state
+		let total, pdModifier, outcome;
+		
+		if (selectedOutcome === 'Wild Pitch') {
+			total = 2;
+			outcome = 'Wild Pitch';
+			pdModifier = 0;
+		} else if (selectedOutcome === 'BB') {
+			total = 4;
+			outcome = 'BB';
+			pdModifier = 0;
+		} else if (selectedOutcome === 'Down the Middle (+1 to BR)') {
+			total = 8;
+			outcome = 'Down the Middle (+1 to BR)';
+			pdModifier = 1;
+		} else if (selectedOutcome === 'On the Plate') {
+			total = 13;
+			outcome = 'On the Plate';
+			pdModifier = 0;
+		} else if (selectedOutcome === 'Paint (-1 to BR)') {
+			total = 17;
+			outcome = 'Paint (-1 to BR)';
+			pdModifier = -1;
+		} else if (selectedOutcome === 'Strikeout Looking') {
+			total = 20;
+			outcome = 'Strikeout Looking';
+			pdModifier = 0;
+		}
+		
+		// Position baseball based on outcome
+		let outcomeAbbr, posX, posY, line1, line2;
+		if (total === 2) {
+			outcomeAbbr = 'WP';
+			// Random position far outside the zone
+			const wpSide = Math.floor(Math.random() * 4);
+			if (wpSide === 0) {
+				posX = Math.random() * 200 - 100;
+				posY = -150;
+			} else if (wpSide === 1) {
+				posX = Math.random() * 200 - 100;
+				posY = 150;
+			} else if (wpSide === 2) {
+				posX = -150;
+				posY = Math.random() * 200 - 100;
+			} else {
+				posX = 150;
+				posY = Math.random() * 200 - 100;
+			}
+			line1 = 'Wild Pitch';
+			line2 = 'or a walk if bases are empty.';
+		} else if (total === 4) {
+			outcomeAbbr = 'BB';
+			// Random position outside the zone
+			const bbSide = Math.floor(Math.random() * 4);
+			if (bbSide === 0) {
+				posX = Math.random() * 200 - 100;
+				posY = -150;
+			} else if (bbSide === 1) {
+				posX = Math.random() * 200 - 100;
+				posY = 150;
+			} else if (bbSide === 2) {
+				posX = -150;
+				posY = Math.random() * 200 - 100;
+			} else {
+				posX = 150;
+				posY = Math.random() * 200 - 100;
+			}
+			line1 = 'Walk';
+			line2 = '';
+		} else if (total === 8) {
+			outcomeAbbr = 'MIDDLE';
+			posX = 0;
+			posY = 0;
+			line1 = 'Down the Middle';
+			line2 = '+1 to Batter Response';
+		} else if (total === 13) {
+			outcomeAbbr = 'ON PLATE';
+			posX = Math.random() * 100 - 50;
+			posY = Math.random() * 150 - 75;
+			line1 = 'On the Plate';
+			line2 = '';
+		} else if (total === 17) {
+			outcomeAbbr = 'PAINT';
+			const side = Math.floor(Math.random() * 4);
+			if (side === 0) {
+				posX = Math.random() * 160 - 80;
+				posY = -120;
+			} else if (side === 1) {
+				posX = Math.random() * 160 - 80;
+				posY = 120;
+			} else if (side === 2) {
+				posX = -80;
+				posY = Math.random() * 240 - 120;
+			} else {
+				posX = 80;
+				posY = Math.random() * 240 - 120;
+			}
+			line1 = 'Painted';
+			line2 = '-1 to Batter Response';
+		} else if (total === 20) {
+			outcomeAbbr = 'SO LOOK';
+			posX = 0;
+			posY = -60;
+			line1 = 'Strikeout Looking';
+			line2 = '';
+		}
+		
+		// Display baseball on strike zone
+		const baseball = document.getElementById('pitch-baseball');
+		baseball.innerHTML = `${total}`;
+		baseball.style.left = `calc(50% + ${posX}px)`;
+		baseball.style.top = `calc(50% + ${posY}px)`;
+		baseball.style.transform = 'translate(-50%, -50%)';
+		baseball.classList.add('show');
+		
+		// Store pdModifier globally for Batter Response to use
+		window.pdModifier = pdModifier;
+		
+		// Handle stamina drain: don't drain if wild pitch with runners on base
+		let wildPitchWithRunners = false;
+		if (outcome === 'Wild Pitch') {
+			wildPitchWithRunners = hasRunners();
+			if (!wildPitchWithRunners) {
+				// No runners on base: drain stamina for the walk
+				pitcher.stamina = Math.max(0, pitcher.stamina - 1);
+			}
+			// If wild pitch with runners: don't drain stamina (play continues)
+		} else {
+			// All other outcomes: drain stamina by 1
+			pitcher.stamina = Math.max(0, pitcher.stamina - 1);
+		}
+		
+		// Handle Wild Pitch
+		if (outcome === 'Wild Pitch') {
+			if (wildPitchWithRunners) {
+				advanceRunners();
+				updateBasesDisplay();
+				populateRostersForTeams();
+				updateScoreDisplay();
+				document.getElementById('startButton').disabled = false;
+			} else {
+				addRunnerToBase('1b');
+				updateBasesDisplay();
+				populateRostersForTeams();
+			}
+		} else if (outcome === 'BB') {
+			if (hasRunners()) {
+				advanceRunnersOnWalk();
+			}
+			addRunnerToBase('1b');
+			updateBasesDisplay();
+			populateRostersForTeams();
+			updateScoreDisplay();
+			logPlay(teamsData[battingTeamIndex].name, batter.name, 'walks');
+		}
+		
+		// Display outcome
+		let outcomeSummary = '';
+		if (outcome === 'Wild Pitch') {
+			outcomeSummary = (runners['2b'] !== null || runners['3b'] !== null) ? 'WILD PITCH - NEXT PITCH' : 'WILD PITCH - NEXT BATTER';
+		} else if (outcome === 'BB') {
+			outcomeSummary = 'WALK';
+		} else if (outcome === 'Strikeout Looking') {
+			outcomeSummary = 'STRIKEOUT LOOKING - OUT';
+		} else if (outcome === 'Down the Middle (+1 to BR)') {
+			outcomeSummary = 'DOWN THE MIDDLE - IN PLAY';
+		} else if (outcome === 'On the Plate') {
+			outcomeSummary = 'ON THE PLATE - IN PLAY';
+		} else if (outcome === 'Paint (-1 to BR)') {
+			outcomeSummary = 'PAINTED - IN PLAY';
+		}
+		updateOutcomeDisplay(outcomeSummary);
+		
+		// Enable/disable Batter Response button
+		if (total >= 5 && total <= 19) {
+			document.getElementById('batterResponseButton').disabled = false;
+		} else {
+			document.getElementById('batterResponseButton').disabled = true;
+		}
+		
+		// Handle Strikeout Looking
+		if (outcome === 'Strikeout Looking') {
+			outs++;
+			updateOutsDisplay();
+			updateNextBatterButton();
+			document.getElementById('batterResponseButton').disabled = true;
+			logPlay(teamsData[battingTeamIndex].name, batter.name, 'strikes out looking');
+		}
+		
+		// Disable pitcher delivery button unless wild pitch with runners
+		if (!(outcome === 'Wild Pitch' && wildPitchWithRunners)) {
+			document.getElementById('startButton').disabled = true;
+		}
+		
+		// Create tab for Pitcher Delivery with "Selected" instead of roll
+		const pdChart = `${createTableHeader()}${createTableRow('Selected', 'Pitcher Delivery Outcome')}${createTableRow(selectedOutcome, 'Result', true)}${closeTable()}`;
+		createTab('pd', 'PD', pdChart, true);
 	}
 
 	function startPitcherDelivery() {
@@ -1893,8 +2557,22 @@
 		const pitcher = teamsData[pitchingTeamIndex].players[currentPitcherIndex];
 		const batter = teamsData[battingTeamIndex].players[currentBatterIndex];
 		
-		// Subtract pitcher stamina by 1 for facing a batter
-		pitcher.stamina = Math.max(0, pitcher.stamina - 1);
+		// If select outcomes mode is on, show outcome selection
+		if (selectOutcomesMode) {
+			const outcomes = [
+				{ name: "Wild Pitch", value: "Wild Pitch" },
+				{ name: "BB", value: "BB" },
+				{ name: "Down the Middle (+1 to BR)", value: "Down the Middle (+1 to BR)" },
+				{ name: "On the Plate", value: "On the Plate" },
+				{ name: "Paint (-1 to BR)", value: "Paint (-1 to BR)" },
+				{ name: "Strikeout Looking", value: "Strikeout Looking" }
+			];
+			
+			showOutcomeSelection('Select Pitcher Delivery Outcome', outcomes, function(selectedOutcome) {
+				executePitcherDeliveryWithOutcome(selectedOutcome, pitcher, batter);
+			});
+			return;
+		}
 		
 		const roll = getRandomRoll(20, 'Pitcher Delivery Die');
 		let modifier = pitcher.control - batter.eye;
@@ -2023,10 +2701,22 @@
 		baseball.style.transform = 'translate(-50%, -50%)';
 		baseball.classList.add('show');
 		
-		// Handle Wild Pitch
+		// Handle stamina drain: don't drain if wild pitch with runners on base
 		let wildPitchWithRunners = false;
 		if (outcome === 'Wild Pitch') {
 			wildPitchWithRunners = hasRunners();
+			if (!wildPitchWithRunners) {
+				// No runners on base: drain stamina for the walk
+				pitcher.stamina = Math.max(0, pitcher.stamina - 1);
+			}
+			// If wild pitch with runners: don't drain stamina (play continues)
+		} else {
+			// All other outcomes: drain stamina by 1
+			pitcher.stamina = Math.max(0, pitcher.stamina - 1);
+		}
+		
+		// Handle Wild Pitch
+		if (outcome === 'Wild Pitch') {
 			if (wildPitchWithRunners) {
 				// Runners on base: advance them and allow another pitch
 				advanceRunners();
@@ -2102,6 +2792,7 @@
 		createTab('pd', 'PD', pdChart, true);
 	}
 
+	// Save and Load Game Functions
     // attach event listeners after DOM is loaded
 	document.addEventListener('DOMContentLoaded', function () {
 		// Ensure manual rolls starts disabled
@@ -2109,6 +2800,13 @@
 		if (manualSwitch) {
 			manualSwitch.checked = false;
 			useManualRolls = false;
+		}
+		
+		// Ensure select outcomes starts disabled
+		const selectSwitch = document.getElementById('selectOutcomesSwitch');
+		if (selectSwitch) {
+			selectSwitch.checked = false;
+			selectOutcomesMode = false;
 		}
 		
 		// Default data
@@ -2132,7 +2830,7 @@
 				players: [
 					{ battingOrder: 1, number: 18, name: "Super", position: "CF", secondaryPos: "", contact: 1, power: 0, eye: 0, speed: 3, control: 0, velocity: 0, stamina: 0, arm: 1, glove: 2, picture: "pfps/kings/super.png", bgColor: "#64B5F6" },
 					{ battingOrder: 2, number: 9, name: "Frost", position: "3B", secondaryPos: "", contact: 2, power: 1, eye: 1, speed: 1, control: 0, velocity: 0, stamina: 0, arm: 0, glove: 2, picture: "pfps/kings/frost.png", bgColor: "#64B5F6" },
-					{ battingOrder: 3, number: 3, name: "Griffin", position: "SP", secondaryPos: "INF", contact: 0, power: 2, eye: 1, speed: 1, control: 1, velocity: 3, stamina: 25, arm: 2, glove: 1, picture: "pfps/kings/griffin.png", bgColor: "#64B5F6" },
+					{ battingOrder: 3, number: 3, name: "Griffin", position: "P", secondaryPos: "INF", contact: 0, power: 2, eye: 1, speed: 1, control: 1, velocity: 3, stamina: 25, arm: 2, glove: 1, picture: "pfps/kings/griffin.png", bgColor: "#64B5F6" },
 					{ battingOrder: 4, number: 33, name: "Lion", position: "SS", secondaryPos: "CP", contact: 1, power: 1, eye: 2, speed: 0, control: 2, velocity: 2, stamina: 6, arm: 1, glove: 2, picture: "pfps/kings/lion.jpg", bgColor: "#64B5F6" },
 					{ battingOrder: 5, number: 1, name: "Justin", position: "RF", secondaryPos: "", contact: 0, power: 3, eye: 0, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 3, glove: 0, picture: "pfps/kings/justin.png", bgColor: "#64B5F6" },
 					{ battingOrder: 6, number: 2, name: "Travis", position: "LF", secondaryPos: "", contact: 1, power: 2, eye: 0, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 3, glove: 0, picture: "pfps/kings/travis.jpg", bgColor: "#64B5F6" },
@@ -2166,7 +2864,7 @@
 					{ battingOrder: 6, number: 4, name: "Sanji", position: "3B", secondaryPos: "", contact: 1, power: 0, eye: 2, speed: 1, control: 0, velocity: 0, stamina: 0, arm: 0, glove: 2, picture: "pfps/strawhars/sanji.webp", bgColor: "#E65100" },
 					{ battingOrder: 7, number: 9, name: "Franky", position: "C", secondaryPos: "", contact: 0, power: 4, eye: 0, speed: 0, control: 0, velocity: 0, stamina: 0, arm: 2, glove: 2, picture: "pfps/strawhars/franky.jpg", bgColor: "#E65100" },
 					{ battingOrder: 8, number: 6, name: "Chopper", position: "LF", secondaryPos: "", contact: 1, power: 1, eye: 1, speed: 1, control: 0, velocity: 0, stamina: 0, arm: 3, glove: 2, picture: "pfps/strawhars/chopper.jpg", bgColor: "#E65100" },
-					{ battingOrder: 9, number: 5, name: "Nami", position: "SP", secondaryPos: "INF", contact: 0, power: 0, eye: 2, speed: 3, control: 3, velocity: 1, stamina: 25, arm: 1, glove: 1, picture: "pfps/strawhars/namni.jpg", bgColor: "#E65100" }
+					{ battingOrder: 9, number: 5, name: "Nami", position: "P", secondaryPos: "INF", contact: 0, power: 0, eye: 2, speed: 3, control: 3, velocity: 1, stamina: 25, arm: 1, glove: 1, picture: "pfps/strawhars/namni.jpg", bgColor: "#E65100" }
 				]
 			}
 		];
@@ -2188,6 +2886,10 @@
 		document.getElementById('nextBatterButton').addEventListener('click', nextBatter);
 		document.getElementById('manualRollSwitch').addEventListener('change', function() {
 			useManualRolls = this.checked;
+		});
+
+		document.getElementById('selectOutcomesSwitch').addEventListener('change', function() {
+			selectOutcomesMode = this.checked;
 		});
 
 		// Expose functions globally for onclick handlers in HTML
