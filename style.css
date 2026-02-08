@@ -1504,6 +1504,27 @@ p {
   font-weight: 600;
 }
 
+.set-stamina-btn {
+  background: #2a5298;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s;
+  padding: 2px 3px;
+  min-width: 24px;
+  text-align: center;
+}
+
+.set-stamina-btn:hover {
+  background: #1a3a7a;
+}
+
+.set-stamina-btn:active {
+  background: #0f2456;
+}
+
 #strike-zone {
   flex: 0.8;
   display: flex;

@@ -2577,9 +2577,11 @@
 		const roll = getRandomRoll(20, 'Pitcher Delivery Die');
 		let modifier = pitcher.control - batter.eye;
 		
-		// Apply -3 modifier if pitcher is out of stamina
+		// Apply stamina penalties
 		if (pitcher.stamina === 0) {
 			modifier -= 3;
+		} else if (pitcher.stamina <= 5) {
+			modifier -= 1;
 		}
 		
 		const total = roll + modifier;
@@ -2785,10 +2787,15 @@
 		
 		// Update tab for Pitcher Delivery
 		let staminaPenalty = 0;
+		let penaltyLabel = '';
 		if (pitcher.stamina === 0) {
 			staminaPenalty = -3;
+			penaltyLabel = 'Stamina Exhaustion (-3)';
+		} else if (pitcher.stamina <= 5) {
+			staminaPenalty = -1;
+			penaltyLabel = 'Low on Energy (-1)';
 		}
-		const pdChart = `${createTableHeader()}${createTableRow(roll, 'Pitcher Delivery D20 Roll')}${createTableRow(-batter.eye, "Batter's Eye Stat")}${createTableRow(pitcher.control, "Pitcher's Control Stat")}${staminaPenalty !== 0 ? createTableRow(staminaPenalty, 'Stamina Exhaustion Penalty') : ''}${createTableRow(total, 'Total Result', true)}${closeTable()}`;
+		const pdChart = `${createTableHeader()}${createTableRow(roll, 'Pitcher Delivery D20 Roll')}${createTableRow(-batter.eye, "Batter's Eye Stat")}${createTableRow(pitcher.control, "Pitcher's Control Stat")}${staminaPenalty !== 0 ? createTableRow(staminaPenalty, penaltyLabel) : ''}${createTableRow(total, 'Total Result', true)}${closeTable()}`;
 		createTab('pd', 'PD', pdChart, true);
 	}
 
@@ -2890,6 +2897,27 @@
 
 		document.getElementById('selectOutcomesSwitch').addEventListener('change', function() {
 			selectOutcomesMode = this.checked;
+		});
+
+		// Set pitcher stamina button
+		document.getElementById('setPitcherStaminaBtn').addEventListener('click', function() {
+			if (currentPitcherIndex === -1 || pitchingTeamIndex === '') {
+				alert('Please select a pitcher first');
+				return;
+			}
+			
+			const pitcher = teamsData[pitchingTeamIndex].players[currentPitcherIndex];
+			const newStamina = prompt(`Set ${pitcher.name}'s stamina (0-25):`, pitcher.stamina);
+			
+			if (newStamina !== null) {
+				const stamina = parseInt(newStamina);
+				if (isNaN(stamina) || stamina < 0 || stamina > 25) {
+					alert('Please enter a valid stamina value between 0 and 25');
+					return;
+				}
+				pitcher.stamina = stamina;
+				document.getElementById('pitcher-stamina').textContent = stamina;
+			}
 		});
 
 		// Expose functions globally for onclick handlers in HTML
