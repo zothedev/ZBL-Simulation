@@ -2580,7 +2580,8 @@
 		// Apply stamina penalties
 		if (pitcher.stamina === 0) {
 			modifier -= 3;
-		} else if (pitcher.stamina <= 5) {
+		} else if (pitcher.stamina <= 5 && pitcher.position === "P") {
+			// Low on energy penalty only for starting pitchers (position P with 25 stamina originally)
 			modifier -= 1;
 		}
 		
@@ -2791,7 +2792,7 @@
 		if (pitcher.stamina === 0) {
 			staminaPenalty = -3;
 			penaltyLabel = 'Stamina Exhaustion (-3)';
-		} else if (pitcher.stamina <= 5) {
+		} else if (pitcher.stamina <= 5 && pitcher.position === "P") {
 			staminaPenalty = -1;
 			penaltyLabel = 'Low on Energy (-1)';
 		}
