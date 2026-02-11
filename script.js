@@ -556,6 +556,7 @@
 				// Swap positions
 				newPitcher.position = 'P';
 				newPitcher.currentPosition = 'P';
+				newPitcher.secondaryPos = newPitcherOriginalPos; // Store original position so we know it's a relief pitcher
 				primaryPitcher.position = newPitcherOriginalPos;
 				primaryPitcher.currentPosition = newPitcherOriginalPos;
 			}
@@ -2578,10 +2579,13 @@
 		let modifier = pitcher.control - batter.eye;
 		
 		// Apply stamina penalties
+		const fieldingPositions = ['C', '1B', '2B', 'SS', '3B', 'LF', 'CF', 'RF'];
+		const isReliefPitcher = fieldingPositions.includes(pitcher.secondaryPos);
+		
 		if (pitcher.stamina === 0) {
 			modifier -= 3;
-		} else if (pitcher.stamina <= 5 && pitcher.position === "P") {
-			// Low on energy penalty only for starting pitchers (position P with 25 stamina originally)
+		} else if (pitcher.stamina <= 5 && pitcher.position === "P" && !isReliefPitcher) {
+			// Low on energy penalty only for starting pitchers (relief pitchers have fielding positions in secondaryPos)
 			modifier -= 1;
 		}
 		
@@ -2793,8 +2797,12 @@
 			staminaPenalty = -3;
 			penaltyLabel = 'Stamina Exhaustion (-3)';
 		} else if (pitcher.stamina <= 5 && pitcher.position === "P") {
-			staminaPenalty = -1;
-			penaltyLabel = 'Low on Energy (-1)';
+			const fieldingPositions = ['C', '1B', '2B', 'SS', '3B', 'LF', 'CF', 'RF'];
+			const isReliefPitcher = fieldingPositions.includes(pitcher.secondaryPos);
+			if (!isReliefPitcher) {
+				staminaPenalty = -1;
+				penaltyLabel = 'Low on Energy (-1)';
+			}
 		}
 		const pdChart = `${createTableHeader()}${createTableRow(roll, 'Pitcher Delivery D20 Roll')}${createTableRow(-batter.eye, "Batter's Eye Stat")}${createTableRow(pitcher.control, "Pitcher's Control Stat")}${staminaPenalty !== 0 ? createTableRow(staminaPenalty, penaltyLabel) : ''}${createTableRow(total, 'Total Result', true)}${closeTable()}`;
 		createTab('pd', 'PD', pdChart, true);
